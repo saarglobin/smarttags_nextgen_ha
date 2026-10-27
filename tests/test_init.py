@@ -14,6 +14,7 @@ from custom_components.smarttags_nextgen.entity import battery_percentage
 from custom_components.smarttags_nextgen.coordinator import parse_stf_date
 
 from .common import (
+    OPERATIONS,
     PHONE,
     TAG_A,
     TAG_B,
@@ -87,6 +88,35 @@ async def test_tags_added_and_removed(hass, mock_devices):
     assert keys.state == "unavailable"
     assert hass.states.get("sensor.keys_battery").state == "unavailable"
 
+
+async def test_tracker_written_only_when_its_location_changes(hass, mock_devices):
+    """An unchanged tag must not renew last_updated, or person would prefer it over a phone."""
+    mock_devices.extend([TAG_A, TAG_B])
+    entry = create_entry(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    coordinator = entry.runtime_data
+    keys = hass.states.get("device_tracker.keys")
+    bag = hass.states.get("device_tracker.bag")
+
+    # another tag moving and this tag's battery changing leave this tag's state alone
+    operations = {
+        "a": [*OPERATIONS["a"], {"oprnType": "CHECK_CONNECTION", "battery": "LOW"}],
+        "b": [{"oprnType": "LOCATION", "latitude": "7.0", "longitude": "8.0"}],
+    }
+    with patch.dict(OPERATIONS, operations):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+    assert hass.states.get("sensor.keys_battery").state == "10"
+    assert hass.states.get("device_tracker.keys") is keys
+    assert hass.states.get("device_tracker.bag").attributes["latitude"] == 7.0
+    assert hass.states.get("device_tracker.bag").last_updated > bag.last_updated
+
+    # becoming unavailable is written
+    mock_devices.remove(TAG_A)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get("device_tracker.keys").state == "unavailable"
 
 async def test_unique_id_not_filled_in_when_account_already_configured(hass, mock_devices):
     mock_devices.append(TAG_A)
