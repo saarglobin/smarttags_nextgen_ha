@@ -36,11 +36,28 @@ If you prefer not to use HACS, you can install the integration files directly on
 
 1. Go to the Integrations page.
 2. Search "SmartThings Find NextGen".
-3. Visit https://smartthingsfind.samsung.com/ and log in with your Samsung account.
-4. Open Developer Tools in your browser.
-5. Copy the JSESSIONID value. Note to copy the one from smartthingsfind.samsung.com (you might have another from another domain).
-6. Enter your JSESSIONID into Home Assistant.
-7. Enjoy :)
+3. Choose how to connect:
+
+### Option 1: Sign in with Samsung account (sessions renew automatically)
+
+1. Open the Developer Tools of your browser (F12) and switch to the **Console** tab.
+2. Open the sign-in link shown by Home Assistant in the same tab and sign in to your Samsung account.
+3. At the end, the browser tries to open an address starting with `ms-app://` and fails. Copy that complete address (Chrome and Edge show it in the Console as *Failed to launch 'ms-app://…'*, otherwise look for it in the **Network** tab) and paste it into Home Assistant.
+
+Home Assistant keeps a Samsung account token and uses it to create a new SmartThings Find session whenever the current one expires, so you only need to sign in again after logging out of your Samsung account or changing its security settings.
+
+**Treat this token like your Samsung password:** anyone with access to your Home Assistant configuration (or its backups) can use it to access your Samsung account. The sign-in is based on the reverse-engineered protocol documented by [samsung-re-find](https://github.com/charlesbel/samsung-re-find) and [uTag](https://github.com/KieronQuinn/uTag/wiki/Authentication); Samsung can change or block it at any time.
+
+### Option 2: Enter a JSESSIONID
+
+1. Visit https://smartthingsfind.samsung.com/ and log in with your Samsung account.
+2. Open Developer Tools in your browser.
+3. Copy the JSESSIONID value. Note to copy the one from smartthingsfind.samsung.com (you might have another from another domain).
+4. Enter your JSESSIONID into Home Assistant.
+
+The session expires after a while; Home Assistant then asks you for a new JSESSIONID.
+
+You can switch between both options, or change the region, with **Reconfigure** in the integration's menu. The update interval can be changed in the integration's options.
 
 ## License
 

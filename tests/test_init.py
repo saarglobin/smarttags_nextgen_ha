@@ -1,14 +1,15 @@
 """Tests for setting up the integration and its entities."""
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
+from custom_components.smarttags_nextgen.account import PendingSignIn
 from custom_components.smarttags_nextgen.const import DOMAIN
 from custom_components.smarttags_nextgen.coordinator import parse_stf_date
 
-from .common import PHONE, TAG_A, TAG_B, create_entry
+from .common import PHONE, TAG_A, TAG_B, create_account_entry, create_entry, record_cookies, start_user_flow
 
 
 def test_parse_stf_date():
@@ -94,7 +95,7 @@ async def test_unload(hass, mock_devices):
 
 async def test_config_flow_creates_entry(hass, mock_devices):
     mock_devices.append(TAG_A)
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await start_user_flow(hass, "cookie")
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"jsession_id": "y", "region": "prd-eu", "custom_region": ""}
     )
@@ -105,7 +106,7 @@ async def test_config_flow_creates_entry(hass, mock_devices):
 
 async def test_config_flow_custom_region(hass, mock_devices):
     mock_devices.append(TAG_A)
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await start_user_flow(hass, "cookie")
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"jsession_id": "y", "region": "custom", "custom_region": ""}
     )
@@ -120,7 +121,7 @@ async def test_config_flow_custom_region(hass, mock_devices):
 async def test_config_flow_aborts_duplicate_account(hass, mock_devices):
     mock_devices.append(TAG_A)
     create_entry(hass, unique_id="12345")
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await start_user_flow(hass, "cookie")
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"jsession_id": "y", "region": "prd-eu", "custom_region": ""}
     )
@@ -144,3 +145,41 @@ async def test_last_known_location(hass, mock_devices):
     (state,) = hass.states.async_all("device_tracker")
     assert (state.attributes["latitude"], state.attributes["longitude"]) == (7.0, 8.0)
     assert state.attributes["last_seen"] == "2026-01-05T12:00:00+00:00"
+
+
+async def test_setup_with_account(hass, aioclient_mock):
+    """Entries using the account sign-in create their session from the account token."""
+    cookies = record_cookies(aioclient_mock)
+    aioclient_mock.get("https://smartthingsfind.samsung.com/chkLogin.do", text="", headers={"_csrf": "token"})
+    aioclient_mock.post("https://smartthingsfind.samsung.com/device/getDeviceList.do", json={"deviceList": [TAG_A]})
+    aioclient_mock.post("https://smartthingsfind.samsung.com/device/setLastSelect.do", json={"operation": []})
+    entry = create_account_entry(hass)
+    with patch(
+        "custom_components.smarttags_nextgen.async_create_web_session", AsyncMock(return_value="created-session")
+    ) as create_session:
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    create_session.assert_awaited_once_with(hass, entry.data)
+    assert cookies[0][1] == {"JSESSIONID": "created-session"}
+    assert len(hass.states.async_all("device_tracker")) == 1
+
+
+async def test_setup_with_rejected_account_token_starts_reauth(hass):
+    from custom_components.smarttags_nextgen.api import SmartTagsAuthError
+
+    entry = create_account_entry(hass)
+    with (
+        patch("custom_components.smarttags_nextgen.async_create_web_session", AsyncMock(side_effect=SmartTagsAuthError)),
+        patch(
+            "custom_components.smarttags_nextgen.config_flow.async_start_sign_in",
+            AsyncMock(return_value=PendingSignIn("https://sign-in", "s", "v", "abcdef")),
+        ),
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is config_entries.ConfigEntryState.SETUP_ERROR
+    (flow,) = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert flow["context"]["source"] == config_entries.SOURCE_REAUTH
+    assert flow["step_id"] == "reauth_account"

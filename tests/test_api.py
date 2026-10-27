@@ -1,4 +1,6 @@
 """Tests running the real API client against mocked Samsung endpoints."""
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
@@ -12,7 +14,7 @@ from custom_components.smarttags_nextgen.api import (
 )
 from custom_components.smarttags_nextgen.const import DOMAIN
 
-from .common import TAG_A, create_entry
+from .common import TAG_A, create_entry, record_cookies
 
 BASE = "https://smartthingsfind.samsung.com"
 CHK = f"{BASE}/chkLogin.do"
@@ -29,12 +31,25 @@ def api(hass):
 
 
 async def test_csrf_ok(hass, aioclient_mock):
+    cookies = record_cookies(aioclient_mock)
     ok_login(aioclient_mock)
     client = api(hass)
     await client.refresh_csrf_token()
     assert client.csrf_token == "token"
-    headers = aioclient_mock.mock_calls[0][3]
-    assert headers["Cookie"] == "JSESSIONID=session"
+    # passed as request cookies, which override cookies stored in the shared session
+    assert cookies == [(CHK, {"JSESSIONID": "session"})]
+    assert "Cookie" not in aioclient_mock.mock_calls[0][3]
+
+
+async def test_requests_pass_session_cookie(hass, aioclient_mock):
+    cookies = record_cookies(aioclient_mock)
+    aioclient_mock.post(LIST, json={"deviceList": []})
+    aioclient_mock.post(SELECT, json={"operation": []})
+    client = api(hass)
+    client.csrf_token = "token"
+    await client.get_devices()
+    await client.set_last_select("a")
+    assert [c for _, c in cookies] == [{"JSESSIONID": "session"}] * 2
 
 
 async def test_csrf_rejected_session(hass, aioclient_mock):
@@ -110,6 +125,7 @@ async def test_reauth_success(hass, aioclient_mock):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"jsession_id": " new "})
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
+    await hass.async_block_till_done()
     assert entry.data == {"jsession_id": "new", "region": "prd-eu"}
 
 
@@ -139,3 +155,36 @@ async def test_server_region(hass, aioclient_mock):
     aioclient_mock.clear_requests()
     aioclient_mock.get(CHK, exc=TimeoutError())
     assert await async_get_server_region(async_get_clientsession(hass)) is None
+
+
+async def test_session_factory_creates_and_renews_session(hass):
+    factory = AsyncMock(side_effect=["first", "second"])
+    client = SmartTagsAPI(async_get_clientsession(hass), None, "prd-eu", factory)
+    fetch = AsyncMock(side_effect=[None, SmartTagsAuthError, None])
+    with patch.object(SmartTagsAPI, "_fetch_csrf_token", fetch):
+        # the first session is created on demand
+        await client.refresh_csrf_token()
+        assert client.jsession_id == "first"
+        # an expired session is replaced and the request retried once
+        await client.refresh_csrf_token()
+        assert client.jsession_id == "second"
+    assert factory.await_count == 2
+    assert fetch.await_count == 3
+
+
+async def test_session_factory_rejected_token(hass):
+    factory = AsyncMock(side_effect=SmartTagsAuthError)
+    client = SmartTagsAPI(async_get_clientsession(hass), "old", "prd-eu", factory)
+    with (
+        patch.object(SmartTagsAPI, "_fetch_csrf_token", AsyncMock(side_effect=SmartTagsAuthError)),
+        pytest.raises(SmartTagsAuthError),
+    ):
+        await client.refresh_csrf_token()
+
+
+async def test_no_renewal_without_session_factory(hass):
+    client = SmartTagsAPI(async_get_clientsession(hass), "old", "prd-eu")
+    fetch = AsyncMock(side_effect=SmartTagsAuthError)
+    with patch.object(SmartTagsAPI, "_fetch_csrf_token", fetch), pytest.raises(SmartTagsAuthError):
+        await client.refresh_csrf_token()
+    assert fetch.await_count == 1

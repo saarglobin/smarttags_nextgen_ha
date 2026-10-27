@@ -4,10 +4,29 @@
       "invalid_auth": "Invalid authentication",
       "cannot_connect": "Failed to connect",
       "empty_custom_region": "Please provide a custom region code (e.g., prd-eu, prd-us)",
-      "unknown": "Unexpected error"
+      "unknown": "Unexpected error",
+      "invalid_redirect": "This is not the ms-app:// address of this sign-in. Copy the complete address from the latest sign-in.",
+      "sign_in_failed": "The Samsung sign-in could not be completed. Please sign in again with the new link."
     },
     "step": {
       "user": {
+        "title": "Samsung SmartTags Setup",
+        "description": "How do you want to connect to SmartThings Find?",
+        "menu_options": {
+          "account": "Sign in with Samsung account (sessions renew automatically)",
+          "cookie": "Enter a JSESSIONID copied from the browser"
+        }
+      },
+      "account": {
+        "title": "Sign in with Samsung account",
+        "description": "1. Open the developer tools of your browser (F12) and switch to the **Console** tab.\n2. [Sign in to your Samsung account]({login_url}) in the same tab.\n3. At the end, the browser tries to open an address starting with `ms-app://` and fails. Copy that complete address and paste it below. Chrome and Edge show it in the Console as *Failed to launch 'ms-app://…'*; otherwise look for it in the **Network** tab.\n\nHome Assistant then keeps a Samsung account token and creates new SmartThings Find sessions by itself when they expire. Treat it like your Samsung password: anyone with access to your Home Assistant configuration can use it to access your Samsung account.",
+        "data": {
+          "redirect_url": "ms-app:// address",
+          "region": "Region",
+          "custom_region": "Custom Region (if 'Other' selected)"
+        }
+      },
+      "cookie": {
         "title": "Samsung SmartTags Setup",
         "description": "Visit [SmartThings Find]({url}) and log in with your Samsung account.\n\n1. Open Developer Tools in your browser (F12).\n2. Navigate to the Application/Storage tab.\n3. Copy the **JSESSIONID** value.\n\n*Note: Make sure to copy the one from `smartthingsfind.samsung.com` (you might have others from different domains).* \n\nPaste your token below:",
         "data": {
@@ -23,11 +42,42 @@
           "jsession_id": "JSESSIONID Token"
         }
       },
+      "reauth_account": {
+        "title": "Sign in to Samsung again",
+        "description": "Samsung no longer accepts the stored account token.\n\n1. Open the developer tools of your browser (F12) and switch to the **Console** tab.\n2. [Sign in to your Samsung account]({login_url}) in the same tab.\n3. At the end, the browser tries to open an address starting with `ms-app://` and fails. Copy that complete address and paste it below. Chrome and Edge show it in the Console as *Failed to launch 'ms-app://…'*; otherwise look for it in the **Network** tab.\n\nHome Assistant then keeps a Samsung account token and creates new SmartThings Find sessions by itself when they expire. Treat it like your Samsung password: anyone with access to your Home Assistant configuration can use it to access your Samsung account.",
+        "data": {
+          "redirect_url": "ms-app:// address"
+        }
+      },
       "reconfigure": {
+        "title": "Reconfigure SmartThings Find",
+        "menu_options": {
+          "reconfigure_region": "Change the region",
+          "reconfigure_account": "Sign in with Samsung account",
+          "reconfigure_cookie": "Enter a JSESSIONID"
+        }
+      },
+      "reconfigure_account": {
+        "title": "Sign in with Samsung account",
+        "description": "1. Open the developer tools of your browser (F12) and switch to the **Console** tab.\n2. [Sign in to your Samsung account]({login_url}) in the same tab.\n3. At the end, the browser tries to open an address starting with `ms-app://` and fails. Copy that complete address and paste it below. Chrome and Edge show it in the Console as *Failed to launch 'ms-app://…'*; otherwise look for it in the **Network** tab.\n\nHome Assistant then keeps a Samsung account token and creates new SmartThings Find sessions by itself when they expire. Treat it like your Samsung password: anyone with access to your Home Assistant configuration can use it to access your Samsung account.",
+        "data": {
+          "redirect_url": "ms-app:// address",
+          "region": "Region",
+          "custom_region": "Custom Region (if 'Other' selected)"
+        }
+      },
+      "reconfigure_cookie": {
         "title": "Update JSESSIONID",
         "description": "Update the JSESSIONID or region of this account.\n\nVisit [SmartThings Find]({url}) and log in with your Samsung account.\n\n1. Open Developer Tools in your browser (F12).\n2. Navigate to the Application/Storage tab.\n3. Copy the **JSESSIONID** value.\n\n*Note: Make sure to copy the one from `smartthingsfind.samsung.com`.*",
         "data": {
           "jsession_id": "JSESSIONID Token",
+          "region": "Region",
+          "custom_region": "Custom Region (if 'Other' selected)"
+        }
+      },
+      "reconfigure_region": {
+        "title": "Change the region",
+        "data": {
           "region": "Region",
           "custom_region": "Custom Region (if 'Other' selected)"
         }
@@ -37,7 +87,8 @@
       "already_configured": "This Samsung account is already configured",
       "reauth_successful": "The session was updated successfully",
       "wrong_account": "The new JSESSIONID belongs to a different Samsung account than the one configured",
-      "reconfigure_successful": "The configuration was updated successfully"
+      "reconfigure_successful": "The configuration was updated successfully",
+      "sign_in_unavailable": "The Samsung account sign-in is currently not available. Try again later or use a JSESSIONID."
     }
   },
   "options": {

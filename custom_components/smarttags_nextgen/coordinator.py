@@ -27,7 +27,7 @@ def parse_stf_date(value):
 
 
 class SmartTagCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, config_entry, jsession_id, region, update_interval):
+    def __init__(self, hass, config_entry, jsession_id, region, update_interval, session_factory=None):
         super().__init__(
             hass,
             _LOGGER,
@@ -37,7 +37,7 @@ class SmartTagCoordinator(DataUpdateCoordinator):
             always_update=False
         )
         # Transmitting the dynamic operational region variable natively into the API setup orchestrator
-        self.api = SmartTagsAPI(async_get_clientsession(hass), jsession_id, region)
+        self.api = SmartTagsAPI(async_get_clientsession(hass), jsession_id, region, session_factory)
         # Samsung account id (usrId) of the devices, used as the config entry unique id
         self.account_id = None
         # Last raw operations per tag, kept for diagnostics

@@ -1,9 +1,19 @@
 import logging
 from datetime import timedelta
+from functools import partial
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_SCAN_INTERVAL
 from homeassistant.core import HomeAssistant
-from .const import DOMAIN, CONF_JSESSION_ID, CONF_REGION, DEFAULT_SCAN_INTERVAL_MINUTES, REGION_EUROPE
+from .account import async_create_web_session
+from .const import (
+    DOMAIN,
+    AUTH_METHOD_ACCOUNT,
+    CONF_AUTH_METHOD,
+    CONF_JSESSION_ID,
+    CONF_REGION,
+    DEFAULT_SCAN_INTERVAL_MINUTES,
+    REGION_EUROPE,
+)
 from .coordinator import SmartTagCoordinator
 
 # We load the platforms definition directly from const to match your original architecture
@@ -17,7 +27,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     region = entry.data.get(CONF_REGION, REGION_EUROPE)
 
     scan_interval = timedelta(minutes=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_MINUTES))
-    coordinator = SmartTagCoordinator(hass, entry, entry.data[CONF_JSESSION_ID], region, scan_interval)
+    if entry.data.get(CONF_AUTH_METHOD) == AUTH_METHOD_ACCOUNT:
+        # Sessions are created from the Samsung account token, on setup and whenever one expires
+        jsession_id = None
+        session_factory = partial(async_create_web_session, hass, entry.data)
+    else:
+        jsession_id = entry.data[CONF_JSESSION_ID]
+        session_factory = None
+    coordinator = SmartTagCoordinator(hass, entry, jsession_id, region, scan_interval, session_factory)
 
     await coordinator.async_config_entry_first_refresh()
 

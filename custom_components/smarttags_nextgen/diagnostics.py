@@ -1,7 +1,17 @@
 from homeassistant.components.diagnostics import async_redact_data
+from .account import CONF_DEVICE_ID, CONF_LOGIN_ID, CONF_USER_ID, CONF_USERAUTH_TOKEN
 from .const import CONF_JSESSION_ID
 
-TO_REDACT = {CONF_JSESSION_ID, "unique_id", "latitude", "longitude"}
+TO_REDACT = {
+    CONF_JSESSION_ID,
+    CONF_USERAUTH_TOKEN,
+    CONF_USER_ID,
+    CONF_LOGIN_ID,
+    CONF_DEVICE_ID,
+    "unique_id",
+    "latitude",
+    "longitude",
+}
 
 
 def _describe_operation(operation):

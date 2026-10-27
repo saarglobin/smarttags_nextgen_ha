@@ -1,10 +1,19 @@
 import aiohttp
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Awaitable, Callable, Dict, Any, Optional, List
 
 _LOGGER = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+
+
+def describe_error(err: Exception) -> str:
+    """Describe a request error without its URL and headers, which can contain the session or tokens."""
+    if isinstance(err, aiohttp.ClientResponseError):
+        return f"{type(err).__name__} (status {err.status})"
+    if isinstance(err, aiohttp.ClientError):
+        return type(err).__name__
+    return f"{type(err).__name__}: {err}"
 
 
 class SmartTagsAuthError(Exception):
@@ -32,11 +41,29 @@ async def async_get_server_region(session: aiohttp.ClientSession) -> Optional[st
 
 
 class SmartTagsAPI:
-    def __init__(self, session: aiohttp.ClientSession, jsession_id: str, region: str):
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        jsession_id: Optional[str],
+        region: str,
+        session_factory: Optional[Callable[[], Awaitable[str]]] = None,
+    ):
         self.session = session
         self.jsession_id = jsession_id
         self.region = region  # Capture the region selected dynamically during config flow execution
         self.csrf_token: Optional[str] = None
+        # Creates a new JSESSIONID when the current one expires (Samsung account sign-in)
+        self._session_factory = session_factory
+
+    @property
+    def cookies(self) -> Dict[str, str]:
+        """The session cookie, passed per request.
+
+        A Cookie header would be overridden by a JSESSIONID in the cookie jar of Home
+        Assistant's shared session (e.g. an anonymous one Samsung set earlier), while
+        cookies passed with the request take precedence over the jar.
+        """
+        return {"JSESSIONID": self.jsession_id or ""}
 
     @property
     def headers(self) -> Dict[str, str]:
@@ -44,7 +71,6 @@ class SmartTagsAPI:
         return {
             "accept": "application/json, text/plain, */*",
             "accept-language": "en-US,en;q=0.9,he;q=0.8,ja;q=0.7",
-            "Cookie": f"JSESSIONID={self.jsession_id}",
             "origin": "https://smartthingsfind.samsung.com",
             "priority": "u=1, i",
             "referer": "https://smartthingsfind.samsung.com/",
@@ -60,10 +86,24 @@ class SmartTagsAPI:
         }
 
     async def refresh_csrf_token(self) -> None:
+        """Fetch a fresh CSRF token, creating a new session first if needed and possible."""
+        if self._session_factory is None:
+            await self._fetch_csrf_token()
+            return
+        if self.jsession_id is None:
+            self.jsession_id = await self._session_factory()
+        try:
+            await self._fetch_csrf_token()
+        except SmartTagsAuthError:
+            _LOGGER.debug("SmartThings Find session expired, creating a new one")
+            self.jsession_id = await self._session_factory()
+            await self._fetch_csrf_token()
+
+    async def _fetch_csrf_token(self) -> None:
         """Fetch a fresh CSRF token from the chkLogin endpoint."""
         url = "https://smartthingsfind.samsung.com/chkLogin.do"
         try:
-            async with self.session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as resp:
+            async with self.session.get(url, headers=self.headers, cookies=self.cookies, timeout=REQUEST_TIMEOUT) as resp:
                 csrf = resp.headers.get("_csrf") or resp.headers.get("X-CSRF-TOKEN")
                 if csrf:
                     self.csrf_token = csrf
@@ -71,7 +111,7 @@ class SmartTagsAPI:
                     return
                 body = await resp.text()
         except (aiohttp.ClientError, TimeoutError) as err:
-            raise SmartTagsConnectionError(f"Error requesting CSRF token: {err!r}") from err
+            raise SmartTagsConnectionError(f"Error requesting CSRF token: {describe_error(err)}") from err
 
         # An unknown or expired session answers 200 with the body "fail" (and no _csrf header)
         if resp.status == 401 or (resp.status == 200 and body.strip() == "fail"):
@@ -87,14 +127,16 @@ class SmartTagsAPI:
         headers = {**self.headers, "content-type": "application/json"}
 
         try:
-            async with self.session.post(url, headers=headers, json={}, timeout=REQUEST_TIMEOUT) as resp:
+            async with self.session.post(
+                url, headers=headers, cookies=self.cookies, json={}, timeout=REQUEST_TIMEOUT
+            ) as resp:
                 if resp.status == 401:
                     raise SmartTagsAuthError("getDeviceList rejected the JSESSIONID")
                 if resp.status != 200:
                     raise SmartTagsConnectionError(f"getDeviceList answered with status {resp.status}")
                 data = await resp.json()
         except (aiohttp.ClientError, TimeoutError, ValueError) as err:
-            raise SmartTagsConnectionError(f"Error fetching device list: {err!r}") from err
+            raise SmartTagsConnectionError(f"Error fetching device list: {describe_error(err)}") from err
 
         if not isinstance(data, dict):
             raise SmartTagsConnectionError("getDeviceList returned an unexpected response")
@@ -112,13 +154,15 @@ class SmartTagsAPI:
         payload = {"dvceId": device_id}
 
         try:
-            async with self.session.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT) as resp:
+            async with self.session.post(
+                url, headers=headers, cookies=self.cookies, json=payload, timeout=REQUEST_TIMEOUT
+            ) as resp:
                 if resp.status != 200:
                     _LOGGER.debug("setLastSelect for %s answered with status %s", device_id, resp.status)
                     return None
                 data = await resp.json()
         except (aiohttp.ClientError, TimeoutError, ValueError) as err:
             # A single tag failing keeps its previous state instead of failing the whole update
-            _LOGGER.debug("Error fetching state of %s: %r", device_id, err)
+            _LOGGER.debug("Error fetching state of %s: %s", device_id, describe_error(err))
             return None
         return data.get("operation", []) if isinstance(data, dict) else None
