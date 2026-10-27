@@ -3,7 +3,7 @@ This is a spiritual successor to https://github.com/Vedeneb/HA-SmartThings-Find 
 
 Viewing smart tags locations on Home Assistant
 
-This project currently only allows to see the locations of the smart tags and not control them in any way. I don't currently plan to try and add these things.
+Each smart tag shows up as a device with its location, battery and last seen time, and buttons to make it ring or to ask it for its current location.
 
 I only have 1 smart tag so I haven't tested it with more than 1, it should work as I dynamically get the list but it might be broken on certain conditions. If you find bugs, feel free to open an issue.
 
@@ -30,7 +30,8 @@ If you prefer not to use HACS, you can install the integration files directly on
 1. Download the latest release source code (or clone this repository).
 2. Using an SSH client, Samba, or the File Editor add-on, locate your Home Assistant `config/` directory.
 3. Look for a folder named `custom_components`. If it does not exist, create it.
-4. Copy the `smarttags_nextgen_ha` folder from this repository into your `custom_components/` directory.
+4. Copy the `custom_components/smarttags_nextgen` folder from this repository into your `custom_components/` directory, so that you have `config/custom_components/smarttags_nextgen/`.
+5. Restart Home Assistant.
 
 ## Setup Instructions
 

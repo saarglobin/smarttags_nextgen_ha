@@ -1,0 +1,12 @@
+{
+  "entity": {
+    "button": {
+      "ring": {
+        "default": "mdi:volume-high"
+      },
+      "refresh_location": {
+        "default": "mdi:crosshairs-gps"
+      }
+    }
+  }
+}

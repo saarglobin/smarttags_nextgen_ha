@@ -188,3 +188,28 @@ async def test_no_renewal_without_session_factory(hass):
     with patch.object(SmartTagsAPI, "_fetch_csrf_token", fetch), pytest.raises(SmartTagsAuthError):
         await client.refresh_csrf_token()
     assert fetch.await_count == 1
+
+
+async def test_device_list_rejected_renews_session(hass):
+    """A session rejected by the device list (not by chkLogin) is also replaced once."""
+    factory = AsyncMock(return_value="second")
+    client = SmartTagsAPI(async_get_clientsession(hass), "first", "prd-eu", factory)
+    fetch_devices = AsyncMock(side_effect=[SmartTagsAuthError, [TAG_A]])
+    fetch_csrf = AsyncMock()
+    with (
+        patch.object(SmartTagsAPI, "_fetch_devices", fetch_devices),
+        patch.object(SmartTagsAPI, "_fetch_csrf_token", fetch_csrf),
+    ):
+        assert await client.get_devices() == [TAG_A]
+    assert client.jsession_id == "second"
+    assert fetch_csrf.await_count == 1
+    assert fetch_devices.await_count == 2
+
+
+async def test_device_list_rejected_without_session_factory(hass, aioclient_mock):
+    aioclient_mock.post(LIST, status=401)
+    client = api(hass)
+    client.csrf_token = "token"
+    with pytest.raises(SmartTagsAuthError):
+        await client.get_devices()
+    assert len(aioclient_mock.mock_calls) == 1

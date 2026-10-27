@@ -40,6 +40,10 @@ async def async_get_server_region(session: aiohttp.ClientSession) -> Optional[st
         return None
 
 
+class SmartTagsOperationError(Exception):
+    """Raised when Samsung rejects an operation such as ringing a tag."""
+
+
 class SmartTagsAPI:
     def __init__(
         self,
@@ -119,6 +123,18 @@ class SmartTagsAPI:
         raise SmartTagsConnectionError(f"chkLogin answered with status {resp.status} but without a CSRF token")
 
     async def get_devices(self) -> List[Dict[str, Any]]:
+        """Fetch the list of all registered devices, creating a new session once if it was rejected."""
+        try:
+            return await self._fetch_devices()
+        except SmartTagsAuthError:
+            if self._session_factory is None:
+                raise
+            _LOGGER.debug("SmartThings Find rejected the session for the device list, creating a new one")
+            self.jsession_id = await self._session_factory()
+            await self._fetch_csrf_token()
+            return await self._fetch_devices()
+
+    async def _fetch_devices(self) -> List[Dict[str, Any]]:
         """Fetch the list of all registered devices."""
         if not self.csrf_token:
             raise SmartTagsConnectionError("Cannot fetch devices: CSRF token is missing or uninitialized")
@@ -166,3 +182,45 @@ class SmartTagsAPI:
             _LOGGER.debug("Error fetching state of %s: %s", device_id, describe_error(err))
             return None
         return data.get("operation", []) if isinstance(data, dict) else None
+
+    async def _post_operation_request(self, path: str, payload: Dict[str, Any], step: str) -> Dict[str, Any]:
+        if not self.csrf_token:
+            raise SmartTagsConnectionError(f"Cannot {step}: CSRF token is missing or uninitialized")
+        url = f"https://smartthingsfind.samsung.com{path}?_csrf={self.csrf_token}"
+        headers = {**self.headers, "content-type": "application/json"}
+        try:
+            async with self.session.post(
+                url, headers=headers, cookies=self.cookies, json=payload, timeout=REQUEST_TIMEOUT
+            ) as resp:
+                if resp.status == 401:
+                    raise SmartTagsAuthError(f"{step} rejected the JSESSIONID")
+                if resp.status != 200:
+                    raise SmartTagsConnectionError(f"{step} answered with status {resp.status}")
+                data = await resp.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            raise SmartTagsConnectionError(f"Error during {step}: {describe_error(err)}") from err
+        if not isinstance(data, dict):
+            raise SmartTagsConnectionError(f"{step} returned an unexpected response")
+        return data
+
+    async def add_operation(
+        self, device_id: str, user_id: Optional[str], operation: str, extra: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Ask a device to perform an operation, e.g. RING or CHECK_CONNECTION_WITH_LOCATION."""
+        payload = {"dvceId": device_id, "operation": operation, "usrId": user_id, **(extra or {})}
+        data = await self._post_operation_request("/dm/addOperation.do", payload, f"{operation} request")
+        # Like the SmartThings Find website, which also accepts requests for devices in power saving mode
+        if data.get("resultCode") != "00" and data.get("powerSavingResultCode") != "00":
+            raise SmartTagsOperationError(
+                f"Samsung rejected the {operation} request ({data.get('resultCode')}, {data.get('faultCode')})"
+            )
+
+    async def get_tag_location(self, device_id: str, latest_time: str) -> List[Dict[str, Any]]:
+        """Fetch the locations a tag reported, as the website does after a location request.
+
+        latest_time is the time of the newest known location (YYYYMMDDHHMMSS, "00000000" if none).
+        """
+        payload = {"dvceId": device_id, "latestTime": latest_time}
+        data = await self._post_operation_request("/dm/getTagLocation.do", payload, "tag location")
+        operations = data.get("operation")
+        return operations if isinstance(operations, list) else []

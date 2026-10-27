@@ -17,7 +17,7 @@ from .const import (
 from .coordinator import SmartTagCoordinator
 
 # We load the platforms definition directly from const to match your original architecture
-PLATFORMS = ["device_tracker", "sensor"]
+PLATFORMS = ["button", "device_tracker", "sensor"]
 
 _LOGGER = logging.getLogger(__name__)
 

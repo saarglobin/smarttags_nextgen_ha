@@ -110,6 +110,22 @@
       "last_seen": {
         "name": "Last seen"
       }
+    },
+    "button": {
+      "ring": {
+        "name": "Ring"
+      },
+      "refresh_location": {
+        "name": "Refresh location"
+      }
+    }
+  },
+  "exceptions": {
+    "session_expired": {
+      "message": "The SmartThings Find session has expired. Please sign in again."
+    },
+    "operation_failed": {
+      "message": "SmartThings Find could not perform the request: {error}"
     }
   }
 }

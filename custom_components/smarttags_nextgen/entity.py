@@ -3,8 +3,18 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 
-# Samsung only reports a coarse battery level for tags
-BATTERY_LEVELS = {"HIGH": 100, "MEDIUM": 50, "LOW": 10}
+# Samsung only reports a coarse battery level for tags (FULL was seen from a SmartTag2)
+BATTERY_LEVELS = {"FULL": 100, "HIGH": 100, "MEDIUM": 50, "LOW": 10, "VERY_LOW": 5}
+
+
+def battery_percentage(value):
+    """Battery level in percent from Samsung's level name, or a number as other devices report."""
+    if value in BATTERY_LEVELS:
+        return BATTERY_LEVELS[value]
+    try:
+        return max(0, min(100, int(value)))
+    except (TypeError, ValueError):
+        return None
 
 
 def async_setup_tag_entities(entry, async_add_entities, entity_factory):

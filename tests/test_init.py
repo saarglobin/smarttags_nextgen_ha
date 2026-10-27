@@ -1,12 +1,15 @@
 """Tests for setting up the integration and its entities."""
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from custom_components.smarttags_nextgen.account import PendingSignIn
 from custom_components.smarttags_nextgen.const import DOMAIN
+from custom_components.smarttags_nextgen.entity import battery_percentage
 from custom_components.smarttags_nextgen.coordinator import parse_stf_date
 
 from .common import PHONE, TAG_A, TAG_B, create_account_entry, create_entry, record_cookies, start_user_flow
@@ -183,3 +186,11 @@ async def test_setup_with_rejected_account_token_starts_reauth(hass):
     (flow,) = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
     assert flow["context"]["source"] == config_entries.SOURCE_REAUTH
     assert flow["step_id"] == "reauth_account"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("FULL", 100), ("HIGH", 100), ("MEDIUM", 50), ("LOW", 10), ("VERY_LOW", 5), ("87", 87), (42, 42), ("UNKNOWN", None), (None, None)],
+)
+def test_battery_percentage(value, expected):
+    assert battery_percentage(value) == expected

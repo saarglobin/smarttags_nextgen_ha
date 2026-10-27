@@ -1,6 +1,6 @@
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import PERCENTAGE
-from .entity import BATTERY_LEVELS, SmartTagEntity, async_setup_tag_entities
+from .entity import SmartTagEntity, async_setup_tag_entities, battery_percentage
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -28,7 +28,7 @@ class SmartTagBatterySensor(SmartTagEntity, SensorEntity):
 
     @property
     def native_value(self):
-        return BATTERY_LEVELS.get(self.tag_data.get("battery"))
+        return battery_percentage(self.tag_data.get("battery"))
 
 
 class SmartTagLastSeenSensor(SmartTagEntity, SensorEntity):
