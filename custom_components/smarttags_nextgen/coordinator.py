@@ -135,7 +135,9 @@ def apply_operations(tag_data, operations, name, newest_date=None):
 
 
 class SmartTagCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, config_entry, jsession_id, region, update_interval, session_factory=None):
+    def __init__(
+        self, hass, config_entry, jsession_id, region, update_interval, session_factory=None, request_locations=False
+    ):
         super().__init__(
             hass,
             _LOGGER,
@@ -150,6 +152,8 @@ class SmartTagCoordinator(DataUpdateCoordinator):
         self.account_id = None
         # Last raw operations per tag, kept for diagnostics
         self.last_operations = {}
+        # Whether every update asks the tags for their current location
+        self.request_locations = request_locations
 
     async def _async_update_data(self):
         """Refresh CSRF, fetch device list, initialize new tags, and synchronize states."""
@@ -238,6 +242,13 @@ class SmartTagCoordinator(DataUpdateCoordinator):
 
             normalized_data[device_id] = tag_data
 
+            if self.request_locations:
+                self.config_entry.async_create_background_task(
+                    self.hass,
+                    self._async_request_location_on_update(device_id, tag.get("usrId")),
+                    name=f"{DOMAIN} location request {device_id}",
+                )
+
         return normalized_data
 
     async def _async_fetch_devices(self):
@@ -294,6 +305,15 @@ class SmartTagCoordinator(DataUpdateCoordinator):
             self._async_fetch_requested_location(device_id),
             name=f"{DOMAIN} location request {device_id}",
         )
+
+    async def _async_request_location_on_update(self, device_id, user_id):
+        """Ask a tag for its current location like async_request_location, without failing the update."""
+        try:
+            await self.api.add_operation(device_id, user_id, "CHECK_CONNECTION_WITH_LOCATION")
+        except (SmartTagsAuthError, SmartTagsConnectionError, SmartTagsOperationError) as err:
+            _LOGGER.debug("Could not request the location of %s: %s", device_id, err)
+            return
+        await self._async_fetch_requested_location(device_id)
 
     async def _async_fetch_requested_location(self, device_id):
         await asyncio.sleep(LOCATION_REQUEST_WAIT)

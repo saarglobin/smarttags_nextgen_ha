@@ -99,14 +99,28 @@ async def test_options_scan_interval(hass, mock_devices):
     assert result["type"] == FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
 
-    assert entry.options == {"scan_interval": 15}
+    assert entry.options == {"scan_interval": 15, "request_locations": False}
     # the entry is reloaded with the new interval
     assert entry.runtime_data.update_interval == timedelta(minutes=15)
+    assert not entry.runtime_data.request_locations
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["data_schema"]({})["scan_interval"] == 15
     with pytest.raises(InvalidData):
         await hass.config_entries.options.async_configure(result["flow_id"], {"scan_interval": 0})
+
+
+async def test_options_request_locations(hass, mock_devices):
+    entry = await _setup(hass, mock_devices)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"scan_interval": 5, "request_locations": True}
+    )
+    await hass.async_block_till_done()
+    assert entry.runtime_data.request_locations
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["data_schema"]({})["request_locations"] is True
 
 
 CF = "custom_components.smarttags_nextgen.config_flow"

@@ -25,6 +25,7 @@ from .const import (
     CONF_AUTH_METHOD,
     CONF_JSESSION_ID,
     CONF_REGION,
+    CONF_REQUEST_LOCATIONS,
     DEFAULT_SCAN_INTERVAL_MINUTES,
     REGION_EUROPE,
     REGION_US_GENERAL,
@@ -388,5 +389,8 @@ class SmartTagsOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(CONF_SCAN_INTERVAL, default=scan_interval): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=60)
                 ),
+                vol.Required(
+                    CONF_REQUEST_LOCATIONS, default=self.config_entry.options.get(CONF_REQUEST_LOCATIONS, False)
+                ): bool,
             }),
         )

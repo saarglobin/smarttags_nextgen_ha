@@ -13,6 +13,7 @@ from .const import (
     CONF_AUTH_METHOD,
     CONF_JSESSION_ID,
     CONF_REGION,
+    CONF_REQUEST_LOCATIONS,
     DEFAULT_SCAN_INTERVAL_MINUTES,
     REGION_EUROPE,
 )
@@ -45,7 +46,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     else:
         jsession_id = entry.data[CONF_JSESSION_ID]
         session_factory = None
-    coordinator = SmartTagCoordinator(hass, entry, jsession_id, region, scan_interval, session_factory)
+    coordinator = SmartTagCoordinator(
+        hass, entry, jsession_id, region, scan_interval, session_factory,
+        request_locations=entry.options.get(CONF_REQUEST_LOCATIONS, False),
+    )
 
     await coordinator.async_config_entry_first_refresh()
 

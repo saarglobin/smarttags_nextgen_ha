@@ -97,10 +97,12 @@
         "title": "SmartThings Find options",
         "description": "To change the JSESSIONID or region, use **Reconfigure** in the integration's menu instead.",
         "data": {
-          "scan_interval": "Update interval (minutes)"
+          "scan_interval": "Update interval (minutes)",
+          "request_locations": "Ask tags for their current location on every update"
         },
         "data_description": {
-          "scan_interval": "How often to fetch the tag locations from Samsung. Shorter intervals send more requests."
+          "scan_interval": "How often to fetch the tag locations from Samsung. Shorter intervals send more requests.",
+          "request_locations": "Like pressing each tag's refresh location button on every update. Without it, the location a tag last reported is shown. Nearby Galaxy devices then look for the tags on every update, which uses more of their battery."
         }
       }
     }

@@ -13,6 +13,7 @@ FIND = "https://smartthingsfind.samsung.com"
 ADD = f"{FIND}/dm/addOperation.do"
 TAG_LOCATION = f"{FIND}/dm/getTagLocation.do"
 WAIT = "custom_components.smarttags_nextgen.coordinator.LOCATION_REQUEST_WAIT"
+API = "custom_components.smarttags_nextgen.api.SmartTagsAPI"
 
 
 async def _setup(hass, mock_devices):
@@ -123,3 +124,48 @@ async def test_refresh_location_rejected(hass, mock_devices, aioclient_mock):
     with pytest.raises(HomeAssistantError):
         await _press(hass, "button.keys_refresh_location")
     assert len(aioclient_mock.mock_calls) == 1
+
+
+async def _setup_requesting_locations(hass, mock_devices):
+    async def refresh_csrf_token(api):
+        api.csrf_token = "token"
+
+    mock_devices.append(TAG_A)
+    entry = create_entry(hass, unique_id="12345")
+    hass.config_entries.async_update_entry(entry, options={"request_locations": True})
+    with patch(WAIT, 0), patch(f"{API}.refresh_csrf_token", refresh_csrf_token):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+
+async def test_request_locations_on_every_update(hass, mock_devices, aioclient_mock):
+    aioclient_mock.post(ADD, json={"resultCode": "00"})
+    aioclient_mock.post(
+        TAG_LOCATION,
+        json={"operation": [{"oprnType": "LOCATION", "latitude": "5.5", "longitude": "6.5", "extra": {"gpsUtcDt": "20260110120000"}}]},
+    )
+
+    await _setup_requesting_locations(hass, mock_devices)
+
+    add, location = aioclient_mock.mock_calls
+    assert add[2] == {"dvceId": "a", "operation": "CHECK_CONNECTION_WITH_LOCATION", "usrId": 12345}
+    assert location[2] == {"dvceId": "a", "latestTime": "20260102120000"}
+    state = hass.states.get("device_tracker.keys")
+    assert (state.attributes["latitude"], state.attributes["longitude"]) == (5.5, 6.5)
+
+
+async def test_request_locations_on_update_rejected(hass, mock_devices, aioclient_mock):
+    aioclient_mock.post(ADD, json={"resultCode": "01", "faultCode": "BIZ-3100"})
+
+    await _setup_requesting_locations(hass, mock_devices)
+
+    # the update still succeeds with the last reported location
+    assert len(aioclient_mock.mock_calls) == 1
+    state = hass.states.get("device_tracker.keys")
+    assert (state.attributes["latitude"], state.attributes["longitude"]) == (3.0, 4.0)
+
+
+async def test_no_location_requests_by_default(hass, mock_devices, aioclient_mock):
+    await _setup(hass, mock_devices)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert aioclient_mock.mock_calls == []
