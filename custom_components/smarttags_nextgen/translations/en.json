@@ -22,29 +22,34 @@
         "data": {
           "jsession_id": "JSESSIONID Token"
         }
+      },
+      "reconfigure": {
+        "title": "Update JSESSIONID",
+        "description": "Update the JSESSIONID or region of this account.\n\nVisit [SmartThings Find]({url}) and log in with your Samsung account.\n\n1. Open Developer Tools in your browser (F12).\n2. Navigate to the Application/Storage tab.\n3. Copy the **JSESSIONID** value.\n\n*Note: Make sure to copy the one from `smartthingsfind.samsung.com`.*",
+        "data": {
+          "jsession_id": "JSESSIONID Token",
+          "region": "Region",
+          "custom_region": "Custom Region (if 'Other' selected)"
+        }
       }
     },
     "abort": {
       "already_configured": "This Samsung account is already configured",
       "reauth_successful": "The session was updated successfully",
-      "wrong_account": "The new JSESSIONID belongs to a different Samsung account than the one configured"
+      "wrong_account": "The new JSESSIONID belongs to a different Samsung account than the one configured",
+      "reconfigure_successful": "The configuration was updated successfully"
     }
   },
   "options": {
-    "error": {
-      "invalid_auth": "Invalid authentication",
-      "cannot_connect": "Failed to connect",
-      "empty_custom_region": "Please provide a custom region code (e.g., prd-eu, prd-us)",
-      "unknown": "Unexpected error"
-    },
     "step": {
       "init": {
-        "title": "Update JSESSIONID",
-        "description": "If your session has expired or you are experiencing connection problems, you can update your token here.\n\nVisit [SmartThings Find]({url}) and log in with your Samsung account.\n\n1. Open Developer Tools in your browser (F12).\n2. Navigate to the Application/Storage tab.\n3. Copy the **JSESSIONID** value.\n\n*Note: Make sure to copy the one from `smartthingsfind.samsung.com`.*",
+        "title": "SmartThings Find options",
+        "description": "To change the JSESSIONID or region, use **Reconfigure** in the integration's menu instead.",
         "data": {
-          "jsession_id": "JSESSIONID Token",
-          "region": "Region",
-          "custom_region": "Custom Region (if 'Other' selected)"
+          "scan_interval": "Update interval (minutes)"
+        },
+        "data_description": {
+          "scan_interval": "How often to fetch the tag locations from Samsung. Shorter intervals send more requests."
         }
       }
     }

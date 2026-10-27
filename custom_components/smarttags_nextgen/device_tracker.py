@@ -1,5 +1,5 @@
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
-from .entity import BATTERY_LEVELS, SmartTagEntity, async_setup_tag_entities
+from .entity import SmartTagEntity, async_setup_tag_entities
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the SmartTag device tracker platform for multiple tags."""
@@ -32,10 +32,6 @@ class SmartTagTracker(SmartTagEntity, TrackerEntity):
     @property
     def source_type(self):
         return SourceType.GPS
-
-    @property
-    def battery_level(self):
-        return BATTERY_LEVELS.get(self.tag_data.get("battery"))
 
     @property
     def icon(self):

@@ -27,12 +27,13 @@ def parse_stf_date(value):
 
 
 class SmartTagCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, jsession_id, region):
+    def __init__(self, hass, config_entry, jsession_id, region, update_interval):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
-            update_interval=timedelta(minutes=5),
+            update_interval=update_interval,
             always_update=False
         )
         # Transmitting the dynamic operational region variable natively into the API setup orchestrator

@@ -15,6 +15,22 @@ class SmartTagsConnectionError(Exception):
     """Raised when SmartThings Find cannot be reached or answers unexpectedly."""
 
 
+async def async_get_server_region(session: aiohttp.ClientSession) -> Optional[str]:
+    """Return the region Samsung routes this client to (x-fmm-orgin header), or None if unavailable.
+
+    This reflects the server Samsung picks for the client's location and does not require a
+    session, so it is only a suggestion for the account's region.
+    """
+    try:
+        async with session.get(
+            "https://smartthingsfind.samsung.com/chkLogin.do", timeout=aiohttp.ClientTimeout(total=10)
+        ) as resp:
+            return resp.headers.get("x-fmm-orgin") or resp.headers.get("x-fmm-origin")
+    except (aiohttp.ClientError, TimeoutError) as err:
+        _LOGGER.debug("Could not determine the SmartThings Find server region: %r", err)
+        return None
+
+
 class SmartTagsAPI:
     def __init__(self, session: aiohttp.ClientSession, jsession_id: str, region: str):
         self.session = session

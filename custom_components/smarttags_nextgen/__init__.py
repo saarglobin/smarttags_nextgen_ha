@@ -1,7 +1,9 @@
 import logging
+from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_SCAN_INTERVAL
 from homeassistant.core import HomeAssistant
-from .const import DOMAIN, CONF_JSESSION_ID, CONF_REGION, REGION_EUROPE
+from .const import DOMAIN, CONF_JSESSION_ID, CONF_REGION, DEFAULT_SCAN_INTERVAL_MINUTES, REGION_EUROPE
 from .coordinator import SmartTagCoordinator
 
 # We load the platforms definition directly from const to match your original architecture
@@ -14,7 +16,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Extract the region selected in the UI form, fallback to prd-eu if missing
     region = entry.data.get(CONF_REGION, REGION_EUROPE)
 
-    coordinator = SmartTagCoordinator(hass, entry.data[CONF_JSESSION_ID], region)
+    scan_interval = timedelta(minutes=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_MINUTES))
+    coordinator = SmartTagCoordinator(hass, entry, entry.data[CONF_JSESSION_ID], region, scan_interval)
 
     await coordinator.async_config_entry_first_refresh()
 

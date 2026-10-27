@@ -8,6 +8,7 @@ from custom_components.smarttags_nextgen.api import (
     SmartTagsAPI,
     SmartTagsAuthError,
     SmartTagsConnectionError,
+    async_get_server_region,
 )
 from custom_components.smarttags_nextgen.const import DOMAIN
 
@@ -130,3 +131,11 @@ async def test_reauth_invalid_session_shows_error(hass, aioclient_mock):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"jsession_id": "bad"})
     assert result["type"] == FlowResultType.FORM
     assert result["errors"] == {"base": "invalid_auth"}
+
+
+async def test_server_region(hass, aioclient_mock):
+    aioclient_mock.get(CHK, text="", headers={"x-fmm-orgin": "prd-us"})
+    assert await async_get_server_region(async_get_clientsession(hass)) == "prd-us"
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(CHK, exc=TimeoutError())
+    assert await async_get_server_region(async_get_clientsession(hass)) is None

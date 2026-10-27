@@ -27,7 +27,7 @@ async def test_setup_entities(hass, mock_devices):
     assert state.attributes["longitude"] == 4.0
     assert state.attributes["gps_accuracy"] == 5.0
     assert state.attributes["location_type"] == "offline"
-    assert state.attributes["battery_level"] == 50
+    assert "battery_level" not in state.attributes
     assert state.attributes["last_seen"] == "2026-01-02T12:00:00+00:00"
 
     entity_registry = er.async_get(hass)

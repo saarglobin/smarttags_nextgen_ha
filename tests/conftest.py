@@ -22,5 +22,9 @@ def mock_devices():
         patch(f"{API}.refresh_csrf_token", AsyncMock(return_value=None)),
         patch(f"{API}.get_devices", AsyncMock(side_effect=lambda: list(devices))),
         patch(f"{API}.set_last_select", AsyncMock(side_effect=lambda device_id: OPERATIONS.get(device_id))),
+        patch(
+            "custom_components.smarttags_nextgen.config_flow.async_get_server_region",
+            AsyncMock(return_value="prd-eu"),
+        ),
     ):
         yield devices
