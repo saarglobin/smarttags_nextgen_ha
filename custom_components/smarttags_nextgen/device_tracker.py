@@ -1,5 +1,6 @@
 from homeassistant.components.device_tracker import TrackerEntity
 from homeassistant.core import callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 
@@ -15,10 +16,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         if not new_device_ids:
             return
         known_device_ids.update(new_device_ids)
-        async_add_entities(
-            SmartTagTracker(coordinator, device_id, coordinator.data[device_id].get("name", "SmartTag"))
-            for device_id in new_device_ids
-        )
+        async_add_entities(SmartTagTracker(coordinator, device_id) for device_id in new_device_ids)
 
     _async_add_new_tags()
     entry.async_on_unload(coordinator.async_add_listener(_async_add_new_tags))
@@ -26,11 +24,21 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class SmartTagTracker(CoordinatorEntity, TrackerEntity):
     """Representation of a specific Samsung SmartTag on the HA Map."""
 
-    def __init__(self, coordinator, device_id, name):
+    # The entity is the main feature of the tag's device, so it takes the device name
+    _attr_has_entity_name = True
+    _attr_name = None
+
+    def __init__(self, coordinator, device_id):
         super().__init__(coordinator)
         self.device_id = device_id
         self._attr_unique_id = f"smarttag_{device_id}"
-        self._attr_name = name
+        tag_data = coordinator.data.get(device_id, {})
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, device_id)},
+            name=tag_data.get("name", "SmartTag"),
+            manufacturer="Samsung",
+            model=tag_data.get("model"),
+        )
 
     # Helper property to quickly grab this specific tag's data block
     @property
@@ -51,6 +59,10 @@ class SmartTagTracker(CoordinatorEntity, TrackerEntity):
         return self.tag_data.get("longitude")
 
     @property
+    def location_accuracy(self):
+        return self.tag_data.get("gps_accuracy") or 0
+
+    @property
     def source_type(self):
         return "gps"
 
@@ -66,6 +78,8 @@ class SmartTagTracker(CoordinatorEntity, TrackerEntity):
         
     @property
     def extra_state_attributes(self):
+        gps_date = self.tag_data.get("gps_date")
         return {
-            "location_type": self.tag_data.get("location_type")
+            "location_type": self.tag_data.get("location_type"),
+            "last_seen": gps_date.isoformat() if gps_date else None,
         }

@@ -10,6 +10,14 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
+def calc_gps_accuracy(horizontal, vertical):
+    """Combine the horizontal and vertical uncertainty (meters) into one accuracy value."""
+    try:
+        return round((float(horizontal) ** 2 + float(vertical) ** 2) ** 0.5, 1)
+    except (TypeError, ValueError):
+        return None
+
+
 def parse_stf_date(value):
     """Parse a SmartThings Find timestamp (YYYYMMDDHHMMSS, UTC), returning None if it is missing or malformed."""
     try:
@@ -74,11 +82,13 @@ class SmartTagCoordinator(DataUpdateCoordinator):
             tag_data = {
                 "device_id": device_id,
                 "name": name,
+                "model": html.unescape(html.unescape(tag["modelName"])) if tag.get("modelName") else None,
                 "latitude": old_tag_data.get("latitude"),
                 "longitude": old_tag_data.get("longitude"),
                 "battery": old_tag_data.get("battery"),
                 "location_type": old_tag_data.get("location_type"),
                 "gps_date": old_tag_data.get("gps_date"),
+                "gps_accuracy": old_tag_data.get("gps_accuracy"),
             }
 
             # Parse Operations (handling OFFLINE_LOC matrices). When several locations are
@@ -105,6 +115,9 @@ class SmartTagCoordinator(DataUpdateCoordinator):
                     tag_data["latitude"] = latitude
                     tag_data["longitude"] = longitude
                     tag_data["gps_date"] = gps_date
+                    tag_data["gps_accuracy"] = calc_gps_accuracy(
+                        oprn.get("horizontalUncertainty"), oprn.get("verticalUncertainty")
+                    )
 
                     # Assign location type based on the operation matrix
                     if oprn_type == "OFFLINE_LOC":
