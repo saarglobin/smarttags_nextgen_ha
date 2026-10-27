@@ -1,7 +1,8 @@
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from .const import DOMAIN, CONF_REGION, REGION_EUROPE
+from .const import DOMAIN, CONF_JSESSION_ID, CONF_REGION, REGION_EUROPE
+from .coordinator import SmartTagCoordinator
 
 # We load the platforms definition directly from const to match your original architecture
 PLATFORMS = ["device_tracker"]
@@ -11,25 +12,21 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up SmartTags from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    
-    jsession_id = entry.data.get("jsession_id")  
-    
+
     # Extract the region selected in the UI form, fallback to prd-eu if missing
     region = entry.data.get(CONF_REGION, REGION_EUROPE)
 
-    # Pass both the jsession_id and the dynamic region parameter directly into your original coordinator architecture
-    # Note: Ensure your coordinator.py accepts this third argument or extracts it accordingly
-    try:
-        from .coordinator import SmartTagCoordinator
-        coordinator = SmartTagCoordinator(hass, jsession_id, region)
-    except TypeError:
-        # Fallback safeguard: If your coordinator __init__ hasn't been updated to accept 'region' yet,
-        # we log a warning and initialize it with 2 arguments to prevent boot crash.
-        _LOGGER.warning("SmartTagCoordinator signature requires an update to accept the 'region' parameter natively.")
-        from .coordinator import SmartTagCoordinator
-        coordinator = SmartTagCoordinator(hass, jsession_id)
+    coordinator = SmartTagCoordinator(hass, entry.data[CONF_JSESSION_ID], region)
 
     await coordinator.async_config_entry_first_refresh()
+
+    # Entries created before the unique id was introduced get the Samsung account id,
+    # unless another entry already claims that account
+    account_id = coordinator.account_id
+    if entry.unique_id is None and account_id and not any(
+        other.unique_id == account_id for other in hass.config_entries.async_entries(DOMAIN)
+    ):
+        hass.config_entries.async_update_entry(entry, unique_id=account_id)
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
 

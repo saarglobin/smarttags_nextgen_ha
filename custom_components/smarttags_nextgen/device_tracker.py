@@ -1,18 +1,27 @@
 from homeassistant.components.device_tracker import TrackerEntity
+from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the SmartTag device tracker platform for multiple tags."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    
-    entities = []
-    # Loop through the dictionary keys (device IDs) the coordinator built
-    for device_id, tag_data in coordinator.data.items():
-        name = tag_data.get("name", "SmartTag")
-        entities.append(SmartTagTracker(coordinator, device_id, name))
-        
-    async_add_entities(entities)
+    known_device_ids = set()
+
+    @callback
+    def _async_add_new_tags():
+        """Create entities for tags that are not tracked yet, including ones added to the account later."""
+        new_device_ids = [device_id for device_id in coordinator.data if device_id not in known_device_ids]
+        if not new_device_ids:
+            return
+        known_device_ids.update(new_device_ids)
+        async_add_entities(
+            SmartTagTracker(coordinator, device_id, coordinator.data[device_id].get("name", "SmartTag"))
+            for device_id in new_device_ids
+        )
+
+    _async_add_new_tags()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_tags))
 
 class SmartTagTracker(CoordinatorEntity, TrackerEntity):
     """Representation of a specific Samsung SmartTag on the HA Map."""
@@ -27,6 +36,11 @@ class SmartTagTracker(CoordinatorEntity, TrackerEntity):
     @property
     def tag_data(self):
         return self.coordinator.data.get(self.device_id, {})
+
+    @property
+    def available(self):
+        # A tag removed from the Samsung account is no longer part of the coordinator data
+        return super().available and self.device_id in self.coordinator.data
 
     @property
     def latitude(self):

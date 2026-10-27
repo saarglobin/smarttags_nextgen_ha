@@ -42,7 +42,8 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> Dict[str,
     if devices is None:
         raise CannotConnect
         
-    return {"title": "SmartThings Find Account"}
+    account_id = next((str(d["usrId"]) for d in devices if d.get("usrId")), None)
+    return {"title": "SmartThings Find Account", "account_id": account_id}
 
 class SmartTagsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for SmartThings Find NextGen."""
@@ -73,7 +74,6 @@ class SmartTagsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
                 try:
                     info = await validate_input(self.hass, validation_data)
-                    return self.async_create_entry(title=info["title"], data=validation_data)
                 except InvalidAuth:
                     errors["base"] = "invalid_auth"
                 except CannotConnect:
@@ -81,6 +81,12 @@ class SmartTagsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 except Exception:  # pylint: disable=broad-except
                     _LOGGER.exception("Unexpected exception occurred during validation")
                     errors["base"] = "unknown"
+                else:
+                    # Prevent adding the same Samsung account twice
+                    if info["account_id"]:
+                        await self.async_set_unique_id(info["account_id"])
+                        self._abort_if_unique_id_configured()
+                    return self.async_create_entry(title=info["title"], data=validation_data)
 
         # Explicit key-value mapping dict linking internal region values to friendly readable UI names
         region_options = {
@@ -128,8 +134,7 @@ class SmartTagsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_JSESSION_ID: user_input[CONF_JSESSION_ID].strip(),
             }
             try:
-                await validate_input(self.hass, validation_data)
-                return self.async_update_reload_and_abort(entry, data=validation_data)
+                info = await validate_input(self.hass, validation_data)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
             except CannotConnect:
@@ -137,6 +142,10 @@ class SmartTagsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception occurred during reauth")
                 errors["base"] = "unknown"
+            else:
+                if entry.unique_id and info["account_id"] and info["account_id"] != entry.unique_id:
+                    return self.async_abort(reason="wrong_account")
+                return self.async_update_reload_and_abort(entry, data=validation_data)
 
         return self.async_show_form(
             step_id="reauth_confirm",

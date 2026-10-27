@@ -45,7 +45,7 @@ class SmartTagsAPI:
                 csrf = resp.headers.get("_csrf") or resp.headers.get("X-CSRF-TOKEN")
                 if csrf:
                     self.csrf_token = csrf
-                    _LOGGER.info("SmartThings Find: Successfully refreshed CSRF token dynamically")
+                    _LOGGER.debug("SmartThings Find: Successfully refreshed CSRF token dynamically")
                     return True
 
                 # An unknown or expired session answers 200 with the body "fail" (and no _csrf header)
@@ -85,7 +85,7 @@ class SmartTagsAPI:
                 data = await resp.json()
                 if data:
                     device_list = data.get("deviceList", [])
-                    _LOGGER.info("SmartThings Find: Found %s total devices in Samsung account", len(device_list))
+                    _LOGGER.debug("SmartThings Find: Found %s total devices in Samsung account", len(device_list))
                     return device_list
                 return None
         except SmartTagsAuthError:

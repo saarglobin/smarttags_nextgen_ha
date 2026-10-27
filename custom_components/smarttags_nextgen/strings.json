@@ -25,7 +25,9 @@
       }
     },
     "abort": {
-      "reauth_successful": "The session was updated successfully"
+      "already_configured": "This Samsung account is already configured",
+      "reauth_successful": "The session was updated successfully",
+      "wrong_account": "The new JSESSIONID belongs to a different Samsung account than the one configured"
     }
   },
   "options": {
