@@ -62,6 +62,8 @@ Home Assistant keeps a Samsung account token and uses it to create a new SmartTh
 
 The session expires after a while; Home Assistant then asks you for a new JSESSIONID.
 
+When a session expires, or Samsung no longer accepts the account token, a notification with the id `smarttags_nextgen_session_expired` is shown until the integration can update again. Automations can trigger on it with the **Persistent notification** trigger, e.g. to send it to your phone.
+
 You can switch between both options, or change the region, with **Reconfigure** in the integration's menu. The update interval can be changed in the integration's options.
 
 ## License

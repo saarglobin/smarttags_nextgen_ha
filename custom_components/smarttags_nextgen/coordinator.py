@@ -3,6 +3,7 @@ import logging
 import aiohttp
 import html
 from datetime import datetime, timedelta, timezone
+from homeassistant.components import persistent_notification
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -27,6 +28,29 @@ RING_IDLE = "idle"
 RING_ERROR = "error"
 # Result code of stopping a device that isn't ringing
 RING_NOT_RINGING = "3008"
+
+# Fixed id, so automations can trigger on it (persistent_notification trigger)
+SESSION_EXPIRED_NOTIFICATION = f"{DOMAIN}_session_expired"
+
+
+def async_set_session_expired(hass, entry, expired):
+    """Show a notification while the session of any config entry has expired, and dismiss it once none has."""
+    expired_entries = hass.data.setdefault(DOMAIN, {}).setdefault("expired_sessions", {})
+    if expired:
+        expired_entries[entry.entry_id] = entry.title
+    elif expired_entries.pop(entry.entry_id, None) is None:
+        return
+    if not expired_entries:
+        persistent_notification.async_dismiss(hass, SESSION_EXPIRED_NOTIFICATION)
+        return
+    persistent_notification.async_create(
+        hass,
+        f"The SmartThings Find session of {', '.join(sorted(expired_entries.values()))} has expired, so "
+        "locations aren't updated and devices can't ring. Sign in again under "
+        "**Settings → Devices & services**.",
+        title="SmartThings Find session expired",
+        notification_id=SESSION_EXPIRED_NOTIFICATION,
+    )
 
 
 def ring_state(result):
@@ -141,10 +165,12 @@ class SmartTagCoordinator(DataUpdateCoordinator):
                 await asyncio.sleep(CONNECT_RETRY_DELAY)
                 devices = await self._async_fetch_devices()
         except SmartTagsAuthError as err:
+            async_set_session_expired(self.hass, self.config_entry, True)
             # Makes Home Assistant start the reauth flow so the user can paste a new JSESSIONID
             raise ConfigEntryAuthFailed("SmartThings Find session expired, please provide a new JSESSIONID") from err
         except SmartTagsConnectionError as err:
             raise UpdateFailed(str(err)) from err
+        async_set_session_expired(self.hass, self.config_entry, False)
 
         for device in devices:
             if device.get("usrId"):
@@ -244,6 +270,7 @@ class SmartTagCoordinator(DataUpdateCoordinator):
             await self.api.refresh_csrf_token()
             return await self.api.add_operation(device_id, user_id, operation, extra)
         except SmartTagsAuthError as err:
+            async_set_session_expired(self.hass, self.config_entry, True)
             self.config_entry.async_start_reauth(self.hass)
             raise HomeAssistantError(
                 translation_domain=DOMAIN, translation_key="session_expired"

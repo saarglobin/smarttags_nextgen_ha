@@ -16,7 +16,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL_MINUTES,
     REGION_EUROPE,
 )
-from .coordinator import SmartTagCoordinator
+from .coordinator import SmartTagCoordinator, async_set_session_expired
 from .services import async_setup_services
 
 # We load the platforms definition directly from const to match your original architecture
@@ -72,3 +72,7 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Dismiss the notification about the entry's expired session."""
+    async_set_session_expired(hass, entry, False)
