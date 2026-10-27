@@ -106,21 +106,3 @@ class SmartTagsAPI:
             _LOGGER.debug("Error fetching state of %s: %r", device_id, err)
             return None
         return data.get("operation", []) if isinstance(data, dict) else None
-
-    async def get_device_locations(self, device_id: str, latest_time: str) -> Optional[List[Dict[str, Any]]]:
-        """Fetch live coordinate telemetry attributes."""
-        if not self.csrf_token:
-            return None
-
-        url = f"https://smartthingsfind.samsung.com/dm/getTagLocation.do?_csrf={self.csrf_token}"
-        headers = {**self.headers, "content-type": "application/json"}
-        payload = {"dvceId": device_id, "latestTime": latest_time}
-
-        try:
-            async with self.session.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.json()
-                return data.get("operation", []) if data else None
-        except Exception:
-            return None

@@ -1,4 +1,4 @@
-from homeassistant.components.device_tracker import TrackerEntity
+from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -6,7 +6,7 @@ from .const import DOMAIN
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the SmartTag device tracker platform for multiple tags."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     known_device_ids = set()
 
     @callback
@@ -64,7 +64,7 @@ class SmartTagTracker(CoordinatorEntity, TrackerEntity):
 
     @property
     def source_type(self):
-        return "gps"
+        return SourceType.GPS
 
     @property
     def battery_level(self):
