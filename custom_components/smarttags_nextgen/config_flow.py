@@ -19,7 +19,7 @@ class InvalidAuth(HomeAssistantError):
 
 # Fixed: Added REGION_ASIA_2 to the source import parameters mapping
 from .const import DOMAIN, CONF_JSESSION_ID, CONF_REGION, REGION_EUROPE, REGION_US_GENERAL, REGION_ASIA, REGION_ASIA_2
-from .api import SmartTagsAPI, SmartTagsAuthError
+from .api import SmartTagsAPI, SmartTagsAuthError, SmartTagsConnectionError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,16 +32,13 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> Dict[str,
     
     # Pre-flight validation check executing a dynamic CSRF exchange
     try:
-        success = await api.refresh_csrf_token()
-        if not success:
-            raise CannotConnect
-
+        await api.refresh_csrf_token()
         devices = await api.get_devices()
     except SmartTagsAuthError as err:
         raise InvalidAuth from err
-    if devices is None:
-        raise CannotConnect
-        
+    except SmartTagsConnectionError as err:
+        raise CannotConnect from err
+
     account_id = next((str(d["usrId"]) for d in devices if d.get("usrId")), None)
     return {"title": "SmartThings Find Account", "account_id": account_id}
 

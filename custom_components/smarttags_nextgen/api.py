@@ -4,9 +4,15 @@ from typing import Dict, Any, Optional, List
 
 _LOGGER = logging.getLogger(__name__)
 
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+
 
 class SmartTagsAuthError(Exception):
     """Raised when Samsung rejects the JSESSIONID (expired or invalid session)."""
+
+
+class SmartTagsConnectionError(Exception):
+    """Raised when SmartThings Find cannot be reached or answers unexpectedly."""
 
 
 class SmartTagsAPI:
@@ -37,62 +43,48 @@ class SmartTagsAPI:
             "x-fmm-orgin": self.region  # Maintain the structural typo fallback as discovered natively
         }
 
-    async def refresh_csrf_token(self) -> bool:
+    async def refresh_csrf_token(self) -> None:
         """Fetch a fresh CSRF token from the chkLogin endpoint."""
         url = "https://smartthingsfind.samsung.com/chkLogin.do"
         try:
-            async with self.session.get(url, headers=self.headers) as resp:
+            async with self.session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as resp:
                 csrf = resp.headers.get("_csrf") or resp.headers.get("X-CSRF-TOKEN")
                 if csrf:
                     self.csrf_token = csrf
                     _LOGGER.debug("SmartThings Find: Successfully refreshed CSRF token dynamically")
-                    return True
-
-                # An unknown or expired session answers 200 with the body "fail" (and no _csrf header)
+                    return
                 body = await resp.text()
-                if resp.status == 401 or (resp.status == 200 and body.strip() == "fail"):
-                    raise SmartTagsAuthError("chkLogin rejected the JSESSIONID")
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise SmartTagsConnectionError(f"Error requesting CSRF token: {err!r}") from err
 
-                _LOGGER.error("SmartThings Find: chkLogin responded with status %s but '_csrf' header was missing.", resp.status)
-                return False
-        except SmartTagsAuthError:
-            raise
-        except Exception as e:
-            _LOGGER.error("Network error attempting to refresh CSRF token: %s", e)
-            return False
+        # An unknown or expired session answers 200 with the body "fail" (and no _csrf header)
+        if resp.status == 401 or (resp.status == 200 and body.strip() == "fail"):
+            raise SmartTagsAuthError("chkLogin rejected the JSESSIONID")
+        raise SmartTagsConnectionError(f"chkLogin answered with status {resp.status} but without a CSRF token")
 
-    async def get_devices(self) -> Optional[List[Dict[str, Any]]]:
+    async def get_devices(self) -> List[Dict[str, Any]]:
         """Fetch the list of all registered devices."""
         if not self.csrf_token:
-            _LOGGER.error("Cannot fetch devices: CSRF token is missing or uninitialized")
-            return None
+            raise SmartTagsConnectionError("Cannot fetch devices: CSRF token is missing or uninitialized")
 
         url = f"https://smartthingsfind.samsung.com/device/getDeviceList.do?_csrf={self.csrf_token}"
         headers = {**self.headers, "content-type": "application/json"}
-        
-        #-- check outgoing request ---
-        # _LOGGER.critical("QA DIAGNOSTIC - OUTGOING REQUEST HEADERS: %s", headers)
-        # -----------------------------------------------------
 
         try:
-            async with self.session.post(url, headers=headers, json={}) as resp:
+            async with self.session.post(url, headers=headers, json={}, timeout=REQUEST_TIMEOUT) as resp:
                 if resp.status == 401:
                     raise SmartTagsAuthError("getDeviceList rejected the JSESSIONID")
                 if resp.status != 200:
-                    _LOGGER.error("Failed to fetch device list. Status: %s", resp.status)
-                    return None
-                    
+                    raise SmartTagsConnectionError(f"getDeviceList answered with status {resp.status}")
                 data = await resp.json()
-                if data:
-                    device_list = data.get("deviceList", [])
-                    _LOGGER.debug("SmartThings Find: Found %s total devices in Samsung account", len(device_list))
-                    return device_list
-                return None
-        except SmartTagsAuthError:
-            raise
-        except Exception as e:
-            _LOGGER.error("Network error fetching device list: %s", e)
-            return None
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            raise SmartTagsConnectionError(f"Error fetching device list: {err!r}") from err
+
+        if not isinstance(data, dict):
+            raise SmartTagsConnectionError("getDeviceList returned an unexpected response")
+        device_list = data.get("deviceList", [])
+        _LOGGER.debug("SmartThings Find: Found %s total devices in Samsung account", len(device_list))
+        return device_list
 
     async def set_last_select(self, device_id: str) -> Optional[List[Dict[str, Any]]]:
         """Fetch baseline state state updates for tracking entities."""
@@ -104,13 +96,16 @@ class SmartTagsAPI:
         payload = {"dvceId": device_id}
 
         try:
-            async with self.session.post(url, headers=headers, json=payload) as resp:
+            async with self.session.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT) as resp:
                 if resp.status != 200:
+                    _LOGGER.debug("setLastSelect for %s answered with status %s", device_id, resp.status)
                     return None
                 data = await resp.json()
-                return data.get("operation", []) if data else None
-        except Exception:
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            # A single tag failing keeps its previous state instead of failing the whole update
+            _LOGGER.debug("Error fetching state of %s: %r", device_id, err)
             return None
+        return data.get("operation", []) if isinstance(data, dict) else None
 
     async def get_device_locations(self, device_id: str, latest_time: str) -> Optional[List[Dict[str, Any]]]:
         """Fetch live coordinate telemetry attributes."""
@@ -122,7 +117,7 @@ class SmartTagsAPI:
         payload = {"dvceId": device_id, "latestTime": latest_time}
 
         try:
-            async with self.session.post(url, headers=headers, json=payload) as resp:
+            async with self.session.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT) as resp:
                 if resp.status != 200:
                     return None
                 data = await resp.json()

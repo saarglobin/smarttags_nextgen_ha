@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from .api import SmartTagsAPI, SmartTagsAuthError
+from .api import SmartTagsAPI, SmartTagsAuthError, SmartTagsConnectionError
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,17 +43,13 @@ class SmartTagCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Refresh CSRF, fetch device list, initialize new tags, and synchronize states."""
         try:
-            token_success = await self.api.refresh_csrf_token()
-            if not token_success:
-                raise UpdateFailed("Failed to dynamically acquire operational CSRF token.")
-
+            await self.api.refresh_csrf_token()
             devices = await self.api.get_devices()
         except SmartTagsAuthError as err:
             # Makes Home Assistant start the reauth flow so the user can paste a new JSESSIONID
             raise ConfigEntryAuthFailed("SmartThings Find session expired, please provide a new JSESSIONID") from err
-
-        if devices is None:
-            raise UpdateFailed("Failed to communicate with Samsung Device List endpoint.")
+        except SmartTagsConnectionError as err:
+            raise UpdateFailed(str(err)) from err
 
         for device in devices:
             if device.get("usrId"):
