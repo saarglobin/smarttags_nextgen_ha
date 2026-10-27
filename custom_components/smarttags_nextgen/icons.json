@@ -7,6 +7,14 @@
       "refresh_location": {
         "default": "mdi:crosshairs-gps"
       }
+    },
+    "switch": {
+      "ring": {
+        "default": "mdi:volume-high",
+        "state": {
+          "off": "mdi:volume-off"
+        }
+      }
     }
   }
 }

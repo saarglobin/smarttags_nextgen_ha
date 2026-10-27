@@ -19,13 +19,26 @@ def battery_percentage(value):
 
 def async_setup_tag_entities(entry, async_add_entities, entity_factory):
     """Add entities for every tag, including tags added to the account after setup."""
+    _async_setup_entities(entry, async_add_entities, entity_factory, tags=True)
+
+
+def async_setup_other_device_entities(entry, async_add_entities, entity_factory):
+    """Add entities for every device that isn't a tag (phones, tablets, watches, earbuds)."""
+    _async_setup_entities(entry, async_add_entities, entity_factory, tags=False)
+
+
+def _async_setup_entities(entry, async_add_entities, entity_factory, tags):
     coordinator = entry.runtime_data
     known_device_ids = set()
 
     @callback
-    def _async_add_new_tags():
-        """Create entities for tags that are not tracked yet."""
-        new_device_ids = [device_id for device_id in coordinator.data if device_id not in known_device_ids]
+    def _async_add_new_devices():
+        """Create entities for devices that are not tracked yet."""
+        new_device_ids = [
+            device_id
+            for device_id, data in coordinator.data.items()
+            if device_id not in known_device_ids and data["is_tag"] == tags
+        ]
         if not new_device_ids:
             return
         known_device_ids.update(new_device_ids)
@@ -33,12 +46,12 @@ def async_setup_tag_entities(entry, async_add_entities, entity_factory):
             entity for device_id in new_device_ids for entity in entity_factory(coordinator, device_id)
         )
 
-    _async_add_new_tags()
-    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_tags))
+    _async_add_new_devices()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_devices))
 
 
 class SmartTagEntity(CoordinatorEntity):
-    """Base class for entities belonging to one SmartTag."""
+    """Base class for entities belonging to one SmartTag or other SmartThings Find device."""
 
     _attr_has_entity_name = True
 

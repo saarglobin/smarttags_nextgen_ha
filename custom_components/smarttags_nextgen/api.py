@@ -209,8 +209,11 @@ class SmartTagsAPI:
 
     async def add_operation(
         self, device_id: str, user_id: Optional[str], operation: str, extra: Optional[Dict[str, Any]] = None
-    ) -> None:
-        """Ask a device to perform an operation, e.g. RING or CHECK_CONNECTION_WITH_LOCATION."""
+    ) -> Optional[str]:
+        """Ask a device to perform an operation, e.g. RING or CHECK_CONNECTION_WITH_LOCATION.
+
+        Returns the request id, which phones and earbuds return but tags don't.
+        """
         payload = {"dvceId": device_id, "operation": operation, "usrId": user_id, **(extra or {})}
         data = await self._post_operation_request("/dm/addOperation.do", payload, f"{operation} request")
         # Like the SmartThings Find website, which also accepts requests for devices in power saving mode
@@ -218,6 +221,22 @@ class SmartTagsAPI:
             raise SmartTagsOperationError(
                 f"Samsung rejected the {operation} request ({data.get('resultCode')}, {data.get('faultCode')})"
             )
+        return str(data["reqId"]) if data.get("reqId") else None
+
+    async def get_operation_results(
+        self, device_id: str, user_id: Optional[str], operation: str
+    ) -> List[Dict[str, Any]]:
+        """Fetch the results of the latest operations of a device, e.g. whether it is ringing.
+
+        Tags return no results.
+        """
+        payload = {"dvceId": device_id, "operation": [operation], "userId": user_id}
+        data = await self._post_operation_request("/dm/getOperationResult.do", payload, f"{operation} result")
+        return [
+            result
+            for result in data.get("operation") or []
+            if isinstance(result, dict) and result.get("oprnType") == operation
+        ]
 
     async def get_tag_location(self, device_id: str, latest_time: str) -> List[Dict[str, Any]]:
         """Fetch the locations a tag reported, as the website does after a location request.

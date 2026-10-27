@@ -118,6 +118,11 @@
       "refresh_location": {
         "name": "Refresh location"
       }
+    },
+    "switch": {
+      "ring": {
+        "name": "Ring"
+      }
     }
   },
   "exceptions": {
@@ -126,6 +131,18 @@
     },
     "operation_failed": {
       "message": "SmartThings Find could not perform the request: {error}"
+    },
+    "ring_find_my_mobile_off": {
+      "message": "{name} can't ring because Find My Mobile is turned off on it."
+    },
+    "ring_on_call": {
+      "message": "{name} can't ring during a call."
+    },
+    "ring_earbuds_worn": {
+      "message": "{name} can't ring while the earbuds are being worn."
+    },
+    "ring_failed": {
+      "message": "{name} could not ring (result code {code})."
     }
   }
 }

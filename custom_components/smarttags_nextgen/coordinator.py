@@ -21,6 +21,37 @@ LOCATION_REQUEST_WAIT = 30
 # How long to wait before retrying an update that could not connect, e.g. after a failed DNS lookup
 CONNECT_RETRY_DELAY = 10
 
+RING_PENDING = "pending"
+RING_RINGING = "ringing"
+RING_IDLE = "idle"
+RING_ERROR = "error"
+# Result code of stopping a device that isn't ringing
+RING_NOT_RINGING = "3008"
+
+
+def ring_state(result):
+    """State of a device's RING operation result, or None if it is unknown.
+
+    Status codes as used by the SmartThings Find website: 1000 and 2100 while the device hasn't
+    answered yet, 2800 once it answered, 1900 and 2900 when it failed (see oprnResultCode).
+    """
+    if not result:
+        return None
+    status = str(result.get("oprnStsCd"))
+    if status in ("1000", "2100"):
+        return RING_PENDING
+    if status in ("1900", "2900"):
+        return RING_ERROR
+    if status != "2800":
+        return None
+    extra = result.get("extra") if isinstance(result.get("extra"), dict) else {}
+    # Phones report extra.status, earbuds extra.left and extra.right; 4 and 5 mean ringing
+    sides = [extra.get(side) for side in ("left", "right") if isinstance(extra.get(side), dict)]
+    statuses = [str(s["status"]) for s in (extra, *sides) if s.get("status") is not None]
+    if not statuses:
+        return None
+    return RING_RINGING if any(status in ("4", "5") for status in statuses) else RING_IDLE
+
 
 def calc_gps_accuracy(horizontal, vertical):
     """Combine the horizontal and vertical uncertainty (meters) into one accuracy value."""
@@ -127,6 +158,22 @@ class SmartTagCoordinator(DataUpdateCoordinator):
         normalized_data = {}
         self.last_operations = {}
 
+        # Phones, tablets, watches and earbuds can be rung; their location isn't fetched, which
+        # would make the phones look for it
+        for device in devices:
+            device_id = device.get("dvceID")
+            if not device_id or device.get("deviceType") == "TAG":
+                continue
+            device_data = {
+                "device_id": device_id,
+                "is_tag": False,
+                "name": html.unescape(html.unescape(device.get("nickName") or device.get("modelName") or device_id)),
+                "model": html.unescape(html.unescape(device["modelName"])) if device.get("modelName") else None,
+                "user_id": device.get("usrId"),
+            }
+            device_data["ring"] = await self._async_get_ring_result(device_data)
+            normalized_data[device_id] = device_data
+
         for tag in tags:
             device_id = tag.get("dvceID")
             # Prefer the user-given nickname so several tags of the same model get distinct names
@@ -143,6 +190,7 @@ class SmartTagCoordinator(DataUpdateCoordinator):
 
             tag_data = {
                 "device_id": device_id,
+                "is_tag": True,
                 "name": name,
                 "model": html.unescape(html.unescape(tag["modelName"])) if tag.get("modelName") else None,
                 # Account the tag belongs to, which differs for tags shared with this account
@@ -170,13 +218,31 @@ class SmartTagCoordinator(DataUpdateCoordinator):
         await self.api.refresh_csrf_token()
         return await self.api.get_devices()
 
+    async def _async_get_ring_result(self, device_data, request_id=None):
+        """The result of the latest RING operation of a device, or of the request with request_id."""
+        try:
+            results = await self.api.get_operation_results(device_data["device_id"], device_data["user_id"], "RING")
+        except (SmartTagsAuthError, SmartTagsConnectionError) as err:
+            _LOGGER.debug("Could not fetch the ring state of %s: %s", device_data["name"], err)
+            return None
+        if request_id is not None:
+            results = [result for result in results if str(result.get("reqId")) == request_id]
+        return results[0] if results else None
+
+    async def async_get_ring_result(self, device_id, request_id=None):
+        """The result of the latest RING operation of a device, or of the request with request_id."""
+        device_data = (self.data or {}).get(device_id)
+        if device_data is None:
+            return None
+        return await self._async_get_ring_result(device_data, request_id)
+
     async def async_start_operation(self, device_id, operation, extra=None):
-        """Ask a tag to perform an operation, e.g. RING."""
+        """Ask a device to perform an operation, e.g. RING, and return the request id if there is one."""
         user_id = (self.data or {}).get(device_id, {}).get("user_id")
         try:
             # Also creates a new session if it expired and the account sign-in is used
             await self.api.refresh_csrf_token()
-            await self.api.add_operation(device_id, user_id, operation, extra)
+            return await self.api.add_operation(device_id, user_id, operation, extra)
         except SmartTagsAuthError as err:
             self.config_entry.async_start_reauth(self.hass)
             raise HomeAssistantError(

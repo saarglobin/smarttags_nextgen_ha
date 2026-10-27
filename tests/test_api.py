@@ -223,3 +223,18 @@ async def test_device_list_rejected_without_session_factory(hass, aioclient_mock
     with pytest.raises(SmartTagsAuthError):
         await client.get_devices()
     assert len(aioclient_mock.mock_calls) == 1
+
+
+async def test_operation_results(hass, aioclient_mock):
+    url = f"{BASE}/dm/getOperationResult.do"
+    ring = {"oprnType": "RING", "reqId": "1", "oprnStsCd": "2800"}
+    aioclient_mock.post(url, json={"operation": [ring, {"oprnType": "LOCATION"}, "garbage"]})
+    client = api(hass)
+    client.csrf_token = "token"
+    assert await client.get_operation_results("p", 12345, "RING") == [ring]
+    assert aioclient_mock.mock_calls[0][2] == {"dvceId": "p", "operation": ["RING"], "userId": 12345}
+
+    # tags return no results
+    aioclient_mock.clear_requests()
+    aioclient_mock.post(url, json={"operation": []})
+    assert await client.get_operation_results("a", 12345, "RING") == []
