@@ -1,6 +1,6 @@
 """Config flow for SmartThings Find NextGen integration."""
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -19,7 +19,7 @@ class InvalidAuth(HomeAssistantError):
 
 # Fixed: Added REGION_ASIA_2 to the source import parameters mapping
 from .const import DOMAIN, CONF_JSESSION_ID, CONF_REGION, REGION_EUROPE, REGION_US_GENERAL, REGION_ASIA, REGION_ASIA_2
-from .api import SmartTagsAPI
+from .api import SmartTagsAPI, SmartTagsAuthError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,11 +31,14 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> Dict[str,
     api = SmartTagsAPI(session, data[CONF_JSESSION_ID], data[CONF_REGION])
     
     # Pre-flight validation check executing a dynamic CSRF exchange
-    success = await api.refresh_csrf_token()
-    if not success:
-        raise InvalidAuth
-        
-    devices = await api.get_devices()
+    try:
+        success = await api.refresh_csrf_token()
+        if not success:
+            raise CannotConnect
+
+        devices = await api.get_devices()
+    except SmartTagsAuthError as err:
+        raise InvalidAuth from err
     if devices is None:
         raise CannotConnect
         
@@ -45,6 +48,8 @@ class SmartTagsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for SmartThings Find NextGen."""
 
     VERSION = 1
+
+    _reauth_entry: Optional[config_entries.ConfigEntry] = None
 
     async def async_step_user(self, user_input: Optional[Dict[str, Any]] = None) -> Any:
         """Handle the initial step creating the interactive UI configurations."""
@@ -103,6 +108,39 @@ class SmartTagsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=data_schema,
+            errors=errors,
+            description_placeholders={"url": "https://smartthingsfind.samsung.com"},
+        )
+
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> Any:
+        """Start reauth when the stored JSESSIONID is rejected by Samsung."""
+        self._reauth_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input: Optional[Dict[str, Any]] = None) -> Any:
+        """Ask for a fresh JSESSIONID, keeping the configured region."""
+        errors: Dict[str, str] = {}
+        entry = self._reauth_entry
+
+        if user_input is not None:
+            validation_data = {
+                **entry.data,
+                CONF_JSESSION_ID: user_input[CONF_JSESSION_ID].strip(),
+            }
+            try:
+                await validate_input(self.hass, validation_data)
+                return self.async_update_reload_and_abort(entry, data=validation_data)
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception occurred during reauth")
+                errors["base"] = "unknown"
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_JSESSION_ID): str}),
             errors=errors,
             description_placeholders={"url": "https://smartthingsfind.samsung.com"},
         )

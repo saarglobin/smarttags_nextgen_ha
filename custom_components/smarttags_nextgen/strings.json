@@ -15,7 +15,17 @@
           "region": "Region",
           "custom_region": "Custom Region (if 'Other' selected)"
         }
+      },
+      "reauth_confirm": {
+        "title": "SmartThings Find session expired",
+        "description": "Samsung rejected the stored JSESSIONID, so your tags can no longer be updated.\n\nVisit [SmartThings Find]({url}) and log in with your Samsung account.\n\n1. Open Developer Tools in your browser (F12).\n2. Navigate to the Application/Storage tab.\n3. Copy the **JSESSIONID** value.\n\n*Note: Make sure to copy the one from `smartthingsfind.samsung.com`.*",
+        "data": {
+          "jsession_id": "JSESSIONID Token"
+        }
       }
+    },
+    "abort": {
+      "reauth_successful": "The session was updated successfully"
     }
   },
   "options": {

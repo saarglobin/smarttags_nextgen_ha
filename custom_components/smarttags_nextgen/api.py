@@ -4,6 +4,11 @@ from typing import Dict, Any, Optional, List
 
 _LOGGER = logging.getLogger(__name__)
 
+
+class SmartTagsAuthError(Exception):
+    """Raised when Samsung rejects the JSESSIONID (expired or invalid session)."""
+
+
 class SmartTagsAPI:
     def __init__(self, session: aiohttp.ClientSession, jsession_id: str, region: str):
         self.session = session
@@ -42,9 +47,16 @@ class SmartTagsAPI:
                     self.csrf_token = csrf
                     _LOGGER.info("SmartThings Find: Successfully refreshed CSRF token dynamically")
                     return True
-                
-                _LOGGER.error("SmartThings Find: chkLogin responded but '_csrf' header was missing. Session might be invalid.")
+
+                # An unknown or expired session answers 200 with the body "fail" (and no _csrf header)
+                body = await resp.text()
+                if resp.status == 401 or (resp.status == 200 and body.strip() == "fail"):
+                    raise SmartTagsAuthError("chkLogin rejected the JSESSIONID")
+
+                _LOGGER.error("SmartThings Find: chkLogin responded with status %s but '_csrf' header was missing.", resp.status)
                 return False
+        except SmartTagsAuthError:
+            raise
         except Exception as e:
             _LOGGER.error("Network error attempting to refresh CSRF token: %s", e)
             return False
@@ -64,6 +76,8 @@ class SmartTagsAPI:
 
         try:
             async with self.session.post(url, headers=headers, json={}) as resp:
+                if resp.status == 401:
+                    raise SmartTagsAuthError("getDeviceList rejected the JSESSIONID")
                 if resp.status != 200:
                     _LOGGER.error("Failed to fetch device list. Status: %s", resp.status)
                     return None
@@ -74,6 +88,8 @@ class SmartTagsAPI:
                     _LOGGER.info("SmartThings Find: Found %s total devices in Samsung account", len(device_list))
                     return device_list
                 return None
+        except SmartTagsAuthError:
+            raise
         except Exception as e:
             _LOGGER.error("Network error fetching device list: %s", e)
             return None
