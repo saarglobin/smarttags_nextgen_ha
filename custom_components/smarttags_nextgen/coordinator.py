@@ -98,7 +98,7 @@ class SmartTagCoordinator(DataUpdateCoordinator):
             for oprn in operations or []:
                 oprn_type = oprn.get("oprnType")
 
-                if oprn_type in ["LOCATION", "OFFLINE_LOC"]:
+                if oprn_type in ["LOCATION", "LASTLOC", "OFFLINE_LOC"]:
                     try:
                         latitude = float(oprn["latitude"])
                         longitude = float(oprn["longitude"])

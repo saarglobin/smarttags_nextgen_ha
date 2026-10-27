@@ -1,4 +1,6 @@
 """Tests for setting up the integration and its entities."""
+from unittest.mock import patch
+
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -124,3 +126,21 @@ async def test_config_flow_aborts_duplicate_account(hass, mock_devices):
     )
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+async def test_last_known_location(hass, mock_devices):
+    """LASTLOC operations are used like LOCATION, and the newest fix still wins."""
+    mock_devices.append(TAG_A)
+    operations = {
+        "a": [
+            {"oprnType": "LOCATION", "latitude": "1.0", "longitude": "2.0", "extra": {"gpsUtcDt": "20260101120000"}},
+            {"oprnType": "LASTLOC", "latitude": "7.0", "longitude": "8.0", "extra": {"gpsUtcDt": "20260105120000"}},
+        ]
+    }
+    with patch.dict("tests.common.OPERATIONS", operations):
+        entry = create_entry(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    (state,) = hass.states.async_all("device_tracker")
+    assert (state.attributes["latitude"], state.attributes["longitude"]) == (7.0, 8.0)
+    assert state.attributes["last_seen"] == "2026-01-05T12:00:00+00:00"
