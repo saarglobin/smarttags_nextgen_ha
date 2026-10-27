@@ -39,6 +39,8 @@ class SmartTagCoordinator(DataUpdateCoordinator):
         self.api = SmartTagsAPI(async_get_clientsession(hass), jsession_id, region)
         # Samsung account id (usrId) of the devices, used as the config entry unique id
         self.account_id = None
+        # Last raw operations per tag, kept for diagnostics
+        self.last_operations = {}
 
     async def _async_update_data(self):
         """Refresh CSRF, fetch device list, initialize new tags, and synchronize states."""
@@ -61,6 +63,7 @@ class SmartTagCoordinator(DataUpdateCoordinator):
 
         old_data = self.data if self.data else {}
         normalized_data = {}
+        self.last_operations = {}
 
         for tag in tags:
             device_id = tag.get("dvceID")
@@ -72,6 +75,7 @@ class SmartTagCoordinator(DataUpdateCoordinator):
             # Force baseline fetch on every poll to bypass Samsung's static state cache
             _LOGGER.debug("Fetching fresh state updates for %s", name)
             operations = await self.api.set_last_select(device_id)
+            self.last_operations[device_id] = operations
             if operations is None:
                 _LOGGER.debug("No state update received for %s, keeping the previous state", name)
 
