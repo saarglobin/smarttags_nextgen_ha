@@ -16,5 +16,13 @@
         }
       }
     }
+  },
+  "services": {
+    "locate": {
+      "service": "mdi:crosshairs-gps"
+    },
+    "refresh": {
+      "service": "mdi:refresh"
+    }
   }
 }

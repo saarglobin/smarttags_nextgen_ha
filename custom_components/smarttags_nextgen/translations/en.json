@@ -143,6 +143,22 @@
     },
     "ring_failed": {
       "message": "{name} could not ring (result code {code})."
+    },
+    "no_tags_targeted": {
+      "message": "The targeted devices don't include a SmartTag of SmartThings Find NextGen."
+    },
+    "refresh_failed": {
+      "message": "SmartThings Find could not be updated: {error}"
+    }
+  },
+  "services": {
+    "locate": {
+      "name": "Request location",
+      "description": "Asks SmartTags for their current location, like their refresh location button. The location updates once a nearby Galaxy device has found the tag."
+    },
+    "refresh": {
+      "name": "Refresh",
+      "description": "Updates all SmartThings Find devices now instead of waiting for the next scheduled update."
     }
   }
 }

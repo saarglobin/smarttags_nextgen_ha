@@ -7,6 +7,8 @@ Each smart tag shows up as a device with its location, battery and last seen tim
 
 Phones, tablets, watches and earbuds in your SmartThings Find account show up as devices with a switch to make them ring. It shows whether the device is ringing, also when it was rung from the SmartThings app, and turning it off stops the ring. Their location isn't shown.
 
+For automations there are two actions: **SmartThings Find NextGen: Request location** (`smarttags_nextgen.locate`) asks the targeted tags for their current location, like their refresh location button, and **SmartThings Find NextGen: Refresh** (`smarttags_nextgen.refresh`) updates all devices without waiting for the update interval.
+
 I only have 1 smart tag so I haven't tested it with more than 1, it should work as I dynamically get the list but it might be broken on certain conditions. If you find bugs, feel free to open an issue.
 
 ## Installation

@@ -4,6 +4,8 @@ from functools import partial
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_SCAN_INTERVAL
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.typing import ConfigType
 from .account import async_create_web_session
 from .const import (
     DOMAIN,
@@ -15,11 +17,20 @@ from .const import (
     REGION_EUROPE,
 )
 from .coordinator import SmartTagCoordinator
+from .services import async_setup_services
 
 # We load the platforms definition directly from const to match your original architecture
 PLATFORMS = ["button", "device_tracker", "sensor", "switch"]
 
+# The integration is only set up from the UI
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 _LOGGER = logging.getLogger(__name__)
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the actions, which work on all loaded config entries."""
+    async_setup_services(hass)
+    return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up SmartTags from a config entry."""

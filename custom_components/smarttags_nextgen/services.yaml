@@ -1,0 +1,5 @@
+locate:
+  target:
+    entity:
+      integration: smarttags_nextgen
+refresh:
