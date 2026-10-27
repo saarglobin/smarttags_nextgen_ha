@@ -8,11 +8,21 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from custom_components.smarttags_nextgen.account import PendingSignIn
+from custom_components.smarttags_nextgen.api import SmartTagsConnectionError
 from custom_components.smarttags_nextgen.const import DOMAIN
 from custom_components.smarttags_nextgen.entity import battery_percentage
 from custom_components.smarttags_nextgen.coordinator import parse_stf_date
 
-from .common import PHONE, TAG_A, TAG_B, create_account_entry, create_entry, record_cookies, start_user_flow
+from .common import (
+    PHONE,
+    TAG_A,
+    TAG_B,
+    create_account_entry,
+    create_entry,
+    dns_error,
+    record_cookies,
+    start_user_flow,
+)
 
 
 def test_parse_stf_date():
@@ -187,6 +197,38 @@ async def test_setup_with_rejected_account_token_starts_reauth(hass):
     assert flow["context"]["source"] == config_entries.SOURCE_REAUTH
     assert flow["step_id"] == "reauth_account"
 
+
+
+def connect_error():
+    err = SmartTagsConnectionError("Error requesting CSRF token")
+    err.__cause__ = dns_error()
+    return err
+
+
+@pytest.mark.parametrize(
+    ("errors", "state", "calls"),
+    [
+        # a failed connection is retried once
+        ([connect_error(), None], config_entries.ConfigEntryState.LOADED, 2),
+        ([connect_error(), connect_error()], config_entries.ConfigEntryState.SETUP_RETRY, 2),
+        # other errors, like an unexpected answer, are not retried
+        ([SmartTagsConnectionError("chkLogin answered with status 503"), None], config_entries.ConfigEntryState.SETUP_RETRY, 1),
+    ],
+)
+async def test_update_retries_failed_connection(hass, mock_devices, errors, state, calls):
+    mock_devices.append(TAG_A)
+    entry = create_entry(hass)
+    with (
+        patch("custom_components.smarttags_nextgen.coordinator.CONNECT_RETRY_DELAY", 0),
+        patch(
+            "custom_components.smarttags_nextgen.api.SmartTagsAPI.refresh_csrf_token", AsyncMock(side_effect=errors)
+        ) as refresh,
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is state
+    assert refresh.await_count == calls
 
 @pytest.mark.parametrize(
     ("value", "expected"),

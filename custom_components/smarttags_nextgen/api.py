@@ -11,6 +11,10 @@ def describe_error(err: Exception) -> str:
     """Describe a request error without its URL and headers, which can contain the session or tokens."""
     if isinstance(err, aiohttp.ClientResponseError):
         return f"{type(err).__name__} (status {err.status})"
+    if isinstance(err, aiohttp.ClientConnectorError):
+        # The host and the OS error (e.g. a failed DNS lookup) contain no session or tokens
+        reason = f": {err.strerror}" if err.strerror else ""
+        return f"{type(err).__name__} ({err.host}{reason})"
     if isinstance(err, aiohttp.ClientError):
         return type(err).__name__
     return f"{type(err).__name__}: {err}"

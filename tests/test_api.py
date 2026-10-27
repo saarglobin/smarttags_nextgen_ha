@@ -14,7 +14,7 @@ from custom_components.smarttags_nextgen.api import (
 )
 from custom_components.smarttags_nextgen.const import DOMAIN
 
-from .common import TAG_A, create_entry, record_cookies
+from .common import TAG_A, create_entry, dns_error, record_cookies
 
 BASE = "https://smartthingsfind.samsung.com"
 CHK = f"{BASE}/chkLogin.do"
@@ -63,6 +63,16 @@ async def test_csrf_connection_errors(hass, aioclient_mock, kwargs):
     aioclient_mock.get(CHK, **kwargs)
     with pytest.raises(SmartTagsConnectionError):
         await api(hass).refresh_csrf_token()
+
+
+async def test_csrf_connection_error_names_host(hass, aioclient_mock):
+    aioclient_mock.get(CHK, exc=dns_error())
+    with pytest.raises(SmartTagsConnectionError) as err:
+        await api(hass).refresh_csrf_token()
+    assert str(err.value) == (
+        "Error requesting CSRF token: ClientConnectorDNSError "
+        "(smartthingsfind.samsung.com: Temporary failure in name resolution)"
+    )
 
 
 async def test_devices_errors(hass, aioclient_mock):

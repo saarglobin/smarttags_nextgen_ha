@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import aiohttp
 import html
 from datetime import datetime, timedelta, timezone
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
@@ -17,6 +18,8 @@ _LOGGER = logging.getLogger(__name__)
 
 # How long the SmartThings Find website waits for a tag to report its location after a request
 LOCATION_REQUEST_WAIT = 30
+# How long to wait before retrying an update that could not connect, e.g. after a failed DNS lookup
+CONNECT_RETRY_DELAY = 10
 
 
 def calc_gps_accuracy(horizontal, vertical):
@@ -96,8 +99,16 @@ class SmartTagCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Refresh CSRF, fetch device list, initialize new tags, and synchronize states."""
         try:
-            await self.api.refresh_csrf_token()
-            devices = await self.api.get_devices()
+            try:
+                devices = await self._async_fetch_devices()
+            except SmartTagsConnectionError as err:
+                # Retry once when no connection could be established, so a short outage of the
+                # DNS server or network doesn't make the tags unavailable until the next update
+                if not isinstance(err.__cause__, aiohttp.ClientConnectorError):
+                    raise
+                _LOGGER.debug("%s, retrying in %s seconds", err, CONNECT_RETRY_DELAY)
+                await asyncio.sleep(CONNECT_RETRY_DELAY)
+                devices = await self._async_fetch_devices()
         except SmartTagsAuthError as err:
             # Makes Home Assistant start the reauth flow so the user can paste a new JSESSIONID
             raise ConfigEntryAuthFailed("SmartThings Find session expired, please provide a new JSESSIONID") from err
@@ -154,6 +165,10 @@ class SmartTagCoordinator(DataUpdateCoordinator):
             normalized_data[device_id] = tag_data
 
         return normalized_data
+
+    async def _async_fetch_devices(self):
+        await self.api.refresh_csrf_token()
+        return await self.api.get_devices()
 
     async def async_start_operation(self, device_id, operation, extra=None):
         """Ask a tag to perform an operation, e.g. RING."""

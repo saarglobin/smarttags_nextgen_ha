@@ -1,4 +1,5 @@
 """Shared test data and helpers."""
+import aiohttp
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -84,3 +85,11 @@ def record_cookies(aioclient_mock):
 
     aioclient_mock.match_request = record
     return calls
+
+
+def dns_error():
+    """The error aiohttp raises when the host name cannot be resolved."""
+    return aiohttp.ClientConnectorDNSError(
+        aiohttp.client_reqrep.ConnectionKey("smartthingsfind.samsung.com", 443, True, True, None, None, None),
+        OSError(-3, "Temporary failure in name resolution"),
+    )
