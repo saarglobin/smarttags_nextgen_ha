@@ -5,7 +5,7 @@ from .const import DOMAIN, CONF_JSESSION_ID, CONF_REGION, REGION_EUROPE
 from .coordinator import SmartTagCoordinator
 
 # We load the platforms definition directly from const to match your original architecture
-PLATFORMS = ["device_tracker"]
+PLATFORMS = ["device_tracker", "sensor"]
 
 _LOGGER = logging.getLogger(__name__)
 
